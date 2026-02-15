@@ -426,6 +426,13 @@ func (e *AnthropicEmitter) EmitStreamChunk(prog *Program) ([]byte, error) {
 				"type":  "message_delta",
 				"delta": map[string]any{"stop_reason": stopReason},
 			}
+			// Look ahead for USAGE in the same chunk (Anthropic puts
+			// usage alongside stop_reason in message_delta).
+			for _, ahead := range prog.Code {
+				if ahead.Op == USAGE {
+					event["usage"] = json.RawMessage(ahead.JSON)
+				}
+			}
 			return json.Marshal(event)
 
 		case STREAM_END:

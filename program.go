@@ -90,6 +90,17 @@ func (p *Program) EmitRef(op Opcode, ref uint32) {
 	p.Code = append(p.Code, Instruction{Op: op, Ref: ref})
 }
 
+// EmitComment appends a COMMENT instruction. Comments are preserved in binary
+// encoding and shown as "; text" in disassembly, but are ignored by emitters.
+func (p *Program) EmitComment(text string) {
+	p.Code = append(p.Code, Instruction{Op: COMMENT, Str: text})
+}
+
+// PrependComment inserts a COMMENT instruction at the very beginning of the program.
+func (p *Program) PrependComment(text string) {
+	p.Code = append([]Instruction{{Op: COMMENT, Str: text}}, p.Code...)
+}
+
 // AddBuffer appends data to the side-buffer and returns its index.
 func (p *Program) AddBuffer(data []byte) uint32 {
 	idx := uint32(len(p.Buffers))
@@ -212,6 +223,14 @@ func (p *Program) Disasm() string {
 
 		for range indent {
 			sb.WriteString("  ")
+		}
+
+		// Comments render with "; " prefix instead of opcode name
+		if inst.Op == COMMENT {
+			sb.WriteString("; ")
+			sb.WriteString(inst.Str)
+			sb.WriteByte('\n')
+			continue
 		}
 
 		sb.WriteString(inst.Op.Name())

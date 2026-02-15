@@ -345,3 +345,145 @@ func TestBinaryInvalidVersion(t *testing.T) {
 		t.Fatal("expected error for unsupported version")
 	}
 }
+
+// ─── COMMENT opcode tests ───────────────────────────────────────────────────
+
+func TestEmitComment(t *testing.T) {
+	p := NewProgram()
+	p.EmitComment("this is a test")
+	p.EmitString(SET_MODEL, "gpt-4o")
+
+	if p.Len() != 2 {
+		t.Fatalf("expected 2 instructions, got %d", p.Len())
+	}
+	if p.Code[0].Op != COMMENT || p.Code[0].Str != "this is a test" {
+		t.Errorf("first instruction: got %v", p.Code[0])
+	}
+}
+
+func TestPrependComment(t *testing.T) {
+	p := NewProgram()
+	p.EmitString(SET_MODEL, "gpt-4o")
+	p.Emit(MSG_START)
+	p.PrependComment("prepended annotation")
+
+	if p.Len() != 3 {
+		t.Fatalf("expected 3 instructions, got %d", p.Len())
+	}
+	if p.Code[0].Op != COMMENT || p.Code[0].Str != "prepended annotation" {
+		t.Errorf("first instruction should be comment, got %v", p.Code[0])
+	}
+	if p.Code[1].Op != SET_MODEL {
+		t.Errorf("second instruction should be SET_MODEL, got %v", p.Code[1].Op)
+	}
+}
+
+func TestCommentDisasm(t *testing.T) {
+	p := NewProgram()
+	p.EmitComment("converted from anthropic")
+	p.EmitString(SET_MODEL, "gpt-4o")
+
+	disasm := p.Disasm()
+	if !strings.Contains(disasm, "; converted from anthropic") {
+		t.Errorf("disasm should render comment with '; ' prefix:\n%s", disasm)
+	}
+	// Should NOT contain "COMMENT" opcode name
+	if strings.Contains(disasm, "COMMENT") {
+		t.Errorf("disasm should not contain opcode name COMMENT:\n%s", disasm)
+	}
+}
+
+func TestCommentBinaryRoundTrip(t *testing.T) {
+	p := NewProgram()
+	p.EmitComment("annotation survives binary")
+	p.EmitString(SET_MODEL, "claude-3")
+	p.Emit(MSG_START)
+	p.Emit(ROLE_USR)
+	p.EmitString(TXT_CHUNK, "Hello")
+	p.Emit(MSG_END)
+
+	var buf bytes.Buffer
+	if err := p.Encode(&buf); err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+
+	p2, err := Decode(&buf)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if p2.Len() != p.Len() {
+		t.Fatalf("decoded length: got %d, want %d", p2.Len(), p.Len())
+	}
+	if p2.Code[0].Op != COMMENT || p2.Code[0].Str != "annotation survives binary" {
+		t.Errorf("decoded comment: got op=%v str=%q", p2.Code[0].Op, p2.Code[0].Str)
+	}
+}
+
+func TestCommentIgnoredByEmitters(t *testing.T) {
+	p := NewProgram()
+	p.EmitComment("this should not appear in output")
+	p.EmitString(SET_MODEL, "gpt-4o")
+	p.Emit(MSG_START)
+	p.Emit(ROLE_USR)
+	p.EmitString(TXT_CHUNK, "Hello")
+	p.Emit(MSG_END)
+
+	// Test all emitters: COMMENT should not appear in any JSON output
+	emitters := []struct {
+		name    string
+		emitter Emitter
+	}{
+		{"ChatCompletions", &ChatCompletionsEmitter{}},
+		{"Anthropic", &AnthropicEmitter{}},
+		{"GoogleGenAI", &GoogleGenAIEmitter{}},
+		{"Responses", &ResponsesEmitter{}},
+	}
+
+	for _, e := range emitters {
+		out, err := e.emitter.EmitRequest(p)
+		if err != nil {
+			t.Fatalf("%s emit: %v", e.name, err)
+		}
+		if strings.Contains(string(out), "this should not appear") {
+			t.Errorf("%s: comment text leaked into output: %s", e.name, string(out))
+		}
+		if strings.Contains(string(out), "COMMENT") {
+			t.Errorf("%s: COMMENT opcode name leaked into output: %s", e.name, string(out))
+		}
+	}
+}
+
+func TestCommentInStreamConverterSkipped(t *testing.T) {
+	// A program with COMMENT should not cause issues in StreamConverter
+	conv, err := NewStreamConverter(StyleChatCompletions, StyleAnthropic)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Push a normal chunk
+	chunk := `{"id":"chatcmpl-c","model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}`
+	outputs, err := conv.Push([]byte(chunk))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outputs) != 1 {
+		t.Fatalf("want 1 output, got %d", len(outputs))
+	}
+
+	// Verify the output doesn't contain any comment artifacts
+	for _, out := range outputs {
+		if strings.Contains(string(out), "comment") || strings.Contains(string(out), "COMMENT") {
+			t.Errorf("comment leaked into stream converter output: %s", string(out))
+		}
+	}
+}
+
+func TestCommentOpcodeName(t *testing.T) {
+	if COMMENT.Name() != "COMMENT" {
+		t.Errorf("COMMENT.Name() = %q, want COMMENT", COMMENT.Name())
+	}
+	if COMMENT.String() != "COMMENT" {
+		t.Errorf("COMMENT.String() = %q, want COMMENT", COMMENT.String())
+	}
+}

@@ -146,3 +146,20 @@ func ConvertRequestProgram(body []byte, from, to Style) (*Program, []byte, error
 
 	return prog, out, nil
 }
+
+// ConvertResponse converts a non-streaming response body from one style to another.
+func ConvertResponse(body []byte, from, to Style) ([]byte, error) {
+	parser, err := GetResponseParser(from)
+	if err != nil {
+		return nil, err
+	}
+	prog, err := parser.ParseResponse(body)
+	if err != nil {
+		return nil, err
+	}
+	emitter, err := GetResponseEmitter(to)
+	if err != nil {
+		return nil, err
+	}
+	return emitter.EmitResponse(prog)
+}

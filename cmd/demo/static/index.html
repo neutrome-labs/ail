@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<meta name="description" content="{{.Description}}">
+<link rel="canonical" href="{{.Canonical}}">
+<link rel="icon" href="/favicon.ico" type="image/x-icon">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="llm2llm">
+<meta property="og:title" content="{{.OGTitle}}">
+<meta property="og:description" content="{{.OGDesc}}">
+<meta property="og:url" content="{{.OGURL}}">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{{.OGTitle}}">
+<meta name="twitter:description" content="{{.OGDesc}}">
+
+<!-- Additional SEO -->
+<meta name="robots" content="index, follow">
+<meta name="author" content="Neutrome Labs">
+<meta name="keywords" content="{{.Keywords}}">
+
+<!-- JSON-LD Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "llm2llm",
+  "url": "{{.BaseDomain}}/",
+  "description": "{{.Description}}",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Any",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "Neutrome Labs",
+    "url": "https://github.com/neutrome-labs"
+  }
+}
+</script>
+
+<script>
+  window.__initialFromStyle = "{{.FromStyle}}";
+  window.__initialToStyle   = "{{.ToStyle}}";
+  window.__fromSlug         = "{{.FromSlug}}";
+  window.__toSlug           = "{{.ToSlug}}";
+</script>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style>
+  /* Only keep syntax highlighting colors — everything else is browser defaults + Tailwind layout */
+  .asm-comment { color: gray; font-style: italic; }
+  .asm-opcode { color: teal; font-weight: bold; }
+  .asm-opcode-struct { color: purple; font-weight: bold; }
+  .asm-opcode-role { color: darkorange; font-weight: bold; }
+  .asm-opcode-config { color: green; font-weight: bold; }
+  .asm-opcode-stream { color: deeppink; font-weight: bold; }
+  .asm-opcode-resp { color: mediumpurple; font-weight: bold; }
+  .asm-string { color: steelblue; }
+  .asm-number { color: chocolate; }
+  .asm-json { color: olivedrab; }
+  .json-key { color: navy; }
+  .json-string { color: steelblue; }
+  .json-number { color: chocolate; }
+  .json-bool { color: darkorange; }
+  .json-null { color: gray; }
+</style>
+</head>
+
+<body class="h-screen flex flex-col" x-data="playground()">
+
+<!-- Header -->
+<header class="flex items-center justify-between px-4 py-2 border-b shrink-0">
+  <div>
+    <a href="/"><h1 class="text-lg font-bold">llm2llm</h1></a>
+    <h2 id="seo-h2" class="text-xs text-gray-500">{{.H2}}</h2>
+  </div>
+  <a href="https://github.com/neutrome-labs/ail" target="_blank" class="text-sm underline">GitHub</a>
+</header>
+
+<!-- SEO: Server-rendered intro (always in DOM for crawlers) -->
+<p id="seo-intro" class="sr-only">{{.Intro}}</p>
+
+<!-- Controls -->
+<div class="flex items-center gap-2 px-4 py-2 border-b flex-wrap shrink-0">
+  <label class="text-xs font-bold">From:</label>
+  <select x-model="fromStyle" @change="loadExample()" class="text-sm border px-1 py-0.5">
+    <option value="openai-chat-completions">OpenAI Chat Completions</option>
+    <option value="openai-responses">OpenAI Responses</option>
+    <option value="anthropic-messages">Anthropic Messages</option>
+    <option value="google-genai">Google GenAI</option>
+    <option value="ail">AIL Assembly</option>
+  </select>
+
+  <span class="text-gray-400">→</span>
+
+  <label class="text-xs font-bold">To:</label>
+  <select x-model="toStyle" class="text-sm border px-1 py-0.5">
+    <option value="openai-chat-completions">OpenAI Chat Completions</option>
+    <option value="openai-responses">OpenAI Responses</option>
+    <option value="anthropic-messages">Anthropic Messages</option>
+    <option value="google-genai">Google GenAI</option>
+    <option value="ail">AIL Assembly</option>
+  </select>
+
+  <label class="text-xs font-bold ml-2">Type:</label>
+  <select x-model="convType" @change="loadExample()" class="text-sm border px-1 py-0.5">
+    <option value="request">Request</option>
+    <option value="response">Response</option>
+    <option value="stream_chunk">Stream Chunk</option>
+  </select>
+
+  <button @click="loadExample()" class="text-sm border px-2 py-0.5 cursor-pointer hover:bg-gray-100">Example</button>
+  <button @click="showDisasm = !showDisasm" class="text-sm border px-2 py-0.5 cursor-pointer hover:bg-gray-100"
+          :class="showDisasm && 'font-bold'">
+    Disasm
+  </button>
+  <button @click="convert()" :disabled="loading" class="text-sm border px-3 py-0.5 font-bold cursor-pointer hover:bg-gray-100 ml-auto disabled:opacity-50">
+    <span x-show="loading">Converting…</span>
+    <span x-show="!loading">Convert</span>
+  </button>
+</div>
+
+<!-- Main panels -->
+<div class="flex-1 grid min-h-0" :class="showDisasm ? 'grid-cols-2 grid-rows-2' : 'grid-cols-2'">
+
+  <!-- Input -->
+  <div class="flex flex-col border-r min-h-0">
+    <div class="flex items-center justify-between px-3 py-1 border-b bg-gray-50 shrink-0">
+      <b class="text-xs">Input</b>
+      <div class="flex items-center gap-2">
+        <small class="text-gray-400">Ctrl+Enter to convert</small>
+        <button @click="copyText(input)" class="text-xs border px-1.5 cursor-pointer hover:bg-gray-100">Copy</button>
+      </div>
+    </div>
+    <textarea x-model="input" @keydown.ctrl.enter.prevent="convert()" @keydown.meta.enter.prevent="convert()"
+      spellcheck="false"
+      class="flex-1 font-mono text-sm p-3 resize-none outline-none border-none min-h-0"
+      style="tab-size:2; white-space:pre; overflow-wrap:normal;"
+      placeholder="Paste your JSON or AIL assembly here…"></textarea>
+  </div>
+
+  <!-- Output -->
+  <div class="flex flex-col min-h-0">
+    <div class="flex items-center justify-between px-3 py-1 border-b bg-gray-50 shrink-0">
+      <b class="text-xs">Output</b>
+      <button @click="copyText(lastOutput)" class="text-xs border px-1.5 cursor-pointer hover:bg-gray-100">Copy</button>
+    </div>
+    <div class="flex-1 overflow-auto min-h-0">
+      <template x-if="error">
+        <pre class="font-mono text-sm p-3 text-red-600 whitespace-pre-wrap" x-text="error"></pre>
+      </template>
+      <template x-if="!error && !lastOutput">
+        <p class="p-4 text-gray-400 text-sm">Converted output will appear here.</p>
+      </template>
+      <template x-if="!error && lastOutput">
+        <pre class="font-mono text-sm p-3 whitespace-pre overflow-x-auto" x-html="highlightedOutput"></pre>
+      </template>
+    </div>
+  </div>
+
+  <!-- Disasm (toggleable) -->
+  <template x-if="showDisasm">
+    <div class="col-span-2 flex flex-col border-t min-h-0">
+      <div class="flex items-center justify-between px-3 py-1 border-b bg-gray-50 shrink-0">
+        <b class="text-xs">AIL Disassembly</b>
+        <button @click="copyText(lastDisasm)" class="text-xs border px-1.5 cursor-pointer hover:bg-gray-100">Copy</button>
+      </div>
+      <div class="flex-1 overflow-auto min-h-0">
+        <template x-if="lastDisasm">
+          <pre class="font-mono text-xs leading-6 p-3 whitespace-pre overflow-x-auto" x-html="highlightedDisasm"></pre>
+        </template>
+        <template x-if="!lastDisasm">
+          <p class="p-3 text-gray-400 text-sm">Run a conversion to see the intermediate AIL representation.</p>
+        </template>
+      </div>
+    </div>
+  </template>
+</div>
+
+<!-- Toast -->
+<div x-show="toast" x-transition.opacity
+     class="fixed bottom-4 right-4 px-3 py-1.5 text-sm border"
+     :class="toastType === 'error' ? 'bg-red-50 border-red-300 text-red-700' : 'bg-green-50 border-green-300 text-green-700'"
+     x-text="toast"></div>
+
+<!-- SEO: Internal links to all conversion routes (crawlable) -->
+<nav class="px-4 py-3 border-t bg-gray-50 shrink-0">
+  <h3 class="text-xs font-bold text-gray-500 mb-2">All conversions</h3>
+  <div class="flex flex-wrap gap-x-4 gap-y-1">
+    {{range .NavLinks}}<a href="{{.Href}}" class="text-xs text-blue-600 hover:underline">{{.Label}}</a>
+    {{end}}
+  </div>
+</nav>
+
+<script>
+// ─── Slug ↔ Style mapping ───────────────────────────────────────────
+const slugToStyle = {
+  'chat':      'openai-chat-completions',
+  'responses': 'openai-responses',
+  'anthropic': 'anthropic-messages',
+  'genai':     'google-genai',
+  'ail':       'ail',
+};
+const styleToSlug = {};
+for (const [k, v] of Object.entries(slugToStyle)) styleToSlug[v] = k;
+
+const slugDisplayName = {
+  'chat':      'OpenAI Chat Completions',
+  'responses': 'OpenAI Responses',
+  'anthropic': 'Anthropic Messages',
+  'genai':     'Google GenAI',
+  'ail':       'AIL Assembly',
+};
+
+function playground() {
+  return {
+    fromStyle: window.__initialFromStyle || 'openai-chat-completions',
+    toStyle:   window.__initialToStyle   || 'anthropic-messages',
+    convType: 'request',
+    input: '',
+    lastOutput: '',
+    lastDisasm: '',
+    error: '',
+    loading: false,
+    showDisasm: false,
+    toast: '',
+    toastType: 'success',
+
+    get highlightedOutput() {
+      if (!this.lastOutput) return '';
+      return this.toStyle === 'ail' ? highlightDisasm(this.lastOutput) : highlightJSON(this.lastOutput);
+    },
+    get highlightedDisasm() {
+      return this.lastDisasm ? highlightDisasm(this.lastDisasm) : '';
+    },
+
+    init() {
+      this.loadExample();
+      // Watch for selection changes and update URL
+      this.$watch('fromStyle', () => this.pushURL());
+      this.$watch('toStyle',   () => this.pushURL());
+    },
+
+    pushURL() {
+      const fSlug = styleToSlug[this.fromStyle];
+      const tSlug = styleToSlug[this.toStyle];
+      if (fSlug && tSlug && fSlug !== tSlug) {
+        const path = '/' + fSlug + '/' + tSlug;
+        const fromName = slugDisplayName[fSlug];
+        const toName   = slugDisplayName[tSlug];
+        history.pushState(null, '', path);
+        document.title = 'Convert ' + fromName + ' to ' + toName + ' JSON online \u2014 llm2llm';
+        const h2El = document.getElementById('seo-h2');
+        const introEl = document.getElementById('seo-intro');
+        if (h2El) h2El.textContent = 'Convert ' + fromName + ' to ' + toName + ' JSON';
+        if (introEl) introEl.textContent = 'Instantly convert ' + fromName + ' API format to ' + toName + ' format online. Paste your ' + fromName + ' request or response JSON and get the equivalent ' + toName + ' JSON in one click.';
+      } else {
+        history.pushState(null, '', '/');
+        document.title = 'llm2llm \u2014 Convert between LLM API formats online';
+      }
+    },
+
+    loadExample() {
+      const data = examples[this.fromStyle];
+      if (!data || !data[this.convType]) { this.flash('No example for this combination', 'error'); return; }
+      const payload = data[this.convType];
+      this.input = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+    },
+
+    async convert() {
+      const input = this.input.trim();
+      if (!input) { this.flash('Please enter input', 'error'); return; }
+      if (this.fromStyle !== 'ail') {
+        try { JSON.parse(input); } catch(e) { this.flash('Invalid JSON: ' + e.message, 'error'); return; }
+      }
+
+      this.loading = true;
+      this.error = '';
+      try {
+        const resp = await fetch('/api/convert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input, fromStyle: this.fromStyle, toStyle: this.toStyle, type: this.convType })
+        });
+        const data = await resp.json();
+        if (data.error) {
+          this.error = data.error;
+          this.lastOutput = '';
+          this.lastDisasm = '';
+        } else {
+          this.lastOutput = data.output || '';
+          this.lastDisasm = data.disasm || '';
+          this.error = '';
+        }
+      } catch (e) {
+        this.error = 'Network error: ' + e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async copyText(text) {
+      if (!text) return;
+      try { await navigator.clipboard.writeText(text); this.flash('Copied!'); }
+      catch { this.flash('Copy failed', 'error'); }
+    },
+
+    flash(msg, type = 'success') {
+      this.toast = msg;
+      this.toastType = type;
+      setTimeout(() => { this.toast = ''; }, 2000);
+    }
+  };
+}
+
+// ─── Examples ───────────────────────────────────────────────────────
+const examples = {
+  "openai-chat-completions": {
+    request: {
+      model: "gpt-4o",
+      temperature: 0.7,
+      max_tokens: 1024,
+      stream: true,
+      messages: [
+        { role: "system", content: "You are a helpful AI assistant." },
+        { role: "user", content: "Explain how neural networks learn, in simple terms." },
+        { role: "assistant", content: "Neural networks learn by adjusting the weights of connections between neurons. Think of it like tuning knobs on a radio to get a clearer signal." },
+        { role: "user", content: "Can you give me an analogy with cooking?" }
+      ],
+      tools: [{
+        type: "function",
+        function: {
+          name: "search_web",
+          description: "Search the web for current information",
+          parameters: { type: "object", properties: { query: { type: "string", description: "The search query" } }, required: ["query"] }
+        }
+      }]
+    },
+    response: {
+      id: "chatcmpl-abc123", object: "chat.completion", created: 1700000000, model: "gpt-4o-2024-08-06",
+      choices: [{ index: 0, message: { role: "assistant", content: "Think of training a neural network like learning to cook a complex dish. Each attempt lets you taste the result and adjust ingredients." }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 120, completion_tokens: 45, total_tokens: 165 }
+    },
+    stream_chunk: {
+      id: "chatcmpl-abc123", object: "chat.completion.chunk", created: 1700000000, model: "gpt-4o",
+      choices: [{ index: 0, delta: { content: "Think of training" }, finish_reason: null }]
+    }
+  },
+  "openai-responses": {
+    request: {
+      model: "gpt-4o", temperature: 0.7, max_output_tokens: 1024,
+      input: [
+        { role: "developer", content: "You are a helpful AI assistant." },
+        { role: "user", content: "What is the capital of France?" }
+      ],
+      tools: [{ type: "function", name: "search_web", description: "Search the web", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } }]
+    },
+    response: {
+      id: "resp_abc123", object: "response", created_at: 1700000000, model: "gpt-4o-2024-08-06",
+      output: [{ type: "message", role: "assistant", content: [{ type: "output_text", text: "The capital of France is Paris." }] }],
+      usage: { input_tokens: 30, output_tokens: 8, total_tokens: 38 }
+    },
+    stream_chunk: { type: "response.output_text.delta", delta: "The capital of ", output_index: 0, content_index: 0 }
+  },
+  "anthropic-messages": {
+    request: {
+      model: "claude-sonnet-4-20250514", max_tokens: 1024,
+      system: "You are a helpful AI assistant.",
+      messages: [
+        { role: "user", content: "Explain how neural networks learn, in simple terms." },
+        { role: "assistant", content: "Neural networks learn by adjusting connection weights, like tuning a radio for a clearer signal." },
+        { role: "user", content: "Can you give me an analogy with cooking?" }
+      ],
+      tools: [{ name: "search_web", description: "Search the web for current information", input_schema: { type: "object", properties: { query: { type: "string", description: "The search query" } }, required: ["query"] } }]
+    },
+    response: {
+      id: "msg_abc123", type: "message", role: "assistant", model: "claude-sonnet-4-20250514",
+      content: [{ type: "text", text: "Training a neural network is like perfecting a recipe — each attempt teaches you how to adjust the ingredients for a better result!" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 95, output_tokens: 32 }
+    },
+    stream_chunk: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Training a neural" } }
+  },
+  "google-genai": {
+    request: {
+      model: "gemini-2.0-flash",
+      generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+      system_instruction: { parts: [{ text: "You are a helpful AI assistant." }] },
+      contents: [
+        { role: "user", parts: [{ text: "Explain how neural networks learn, in simple terms." }] },
+        { role: "model", parts: [{ text: "Neural networks learn by adjusting connection weights through backpropagation." }] },
+        { role: "user", parts: [{ text: "Can you give me an analogy with cooking?" }] }
+      ],
+      tools: [{ functionDeclarations: [{ name: "search_web", description: "Search the web for current information", parameters: { type: "object", properties: { query: { type: "string", description: "The search query" } }, required: ["query"] } }] }]
+    },
+    response: {
+      candidates: [{ content: { role: "model", parts: [{ text: "Training a neural network is like perfecting a recipe through many iterations of tasting and adjusting." }] }, finishReason: "STOP" }],
+      usageMetadata: { promptTokenCount: 80, candidatesTokenCount: 20, totalTokenCount: 100 }
+    },
+    stream_chunk: { candidates: [{ content: { role: "model", parts: [{ text: "Training a neural" }] } }] }
+  },
+  "ail": {
+    request: `SET_MODEL "gpt-4o"\nSET_TEMP 0.7000\nSET_MAX 1024\nSET_STREAM\nMSG_START\n  ROLE_SYS\n  TXT_CHUNK "You are a helpful AI assistant."\nMSG_END\nMSG_START\n  ROLE_USR\n  TXT_CHUNK "Explain how neural networks learn, in simple terms."\nMSG_END\nDEF_START\n  DEF_NAME "search_web"\n  DEF_DESC "Search the web for current information"\n  DEF_SCHEMA {"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}\nDEF_END`,
+    response: `RESP_ID "chatcmpl-abc123"\nRESP_MODEL "gpt-4o-2024-08-06"\nMSG_START\n  ROLE_AST\n  TXT_CHUNK "Think of training a neural network like learning to cook a complex dish."\nMSG_END\nRESP_DONE "stop"\nUSAGE {"prompt_tokens":120,"completion_tokens":45,"total_tokens":165}`,
+    stream_chunk: `STREAM_START\n  STREAM_DELTA "Think of training"\nSTREAM_END`
+  }
+};
+
+// ─── Syntax highlighting (pure functions) ───────────────────────────
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+function highlightJSON(json) {
+  return escapeHtml(json)
+    .replace(/"([^"\\]*(\\.[^"\\]*)*)"\s*:/g, '<span class="json-key">"$1"</span>:')
+    .replace(/:\s*"([^"\\]*(\\.[^"\\]*)*)"/g, ': <span class="json-string">"$1"</span>')
+    .replace(/:\s*(-?\d+\.?\d*([eE][+-]?\d+)?)\b/g, ': <span class="json-number">$1</span>')
+    .replace(/:\s*(true|false)\b/g, ': <span class="json-bool">$1</span>')
+    .replace(/:\s*(null)\b/g, ': <span class="json-null">$1</span>');
+}
+
+function highlightDisasm(text) {
+  return escapeHtml(text).split('\n').map(line => {
+    if (line.trimStart().startsWith(';')) return `<span class="asm-comment">${line}</span>`;
+    const trimmed = line.trimStart();
+    const pad = '&nbsp;'.repeat(line.length - trimmed.length);
+    const m = trimmed.match(/^([A-Z_]+)(.*)/);
+    if (!m) return line;
+    const [, op, rest] = m;
+    let cls = 'asm-opcode';
+    if (/^(MSG_START|MSG_END|DEF_START|DEF_END|CALL_START|CALL_END|RESULT_START|RESULT_END)$/.test(op)) cls = 'asm-opcode-struct';
+    else if (/^(ROLE_SYS|ROLE_USR|ROLE_AST|ROLE_TOOL)$/.test(op)) cls = 'asm-opcode-role';
+    else if (/^(SET_MODEL|SET_TEMP|SET_TOPP|SET_MAX|SET_STREAM|SET_STOP|SET_META|EXT_DATA)$/.test(op)) cls = 'asm-opcode-config';
+    else if (/^(STREAM_START|STREAM_DELTA|STREAM_TOOL_DELTA|STREAM_END)$/.test(op)) cls = 'asm-opcode-stream';
+    else if (/^(RESP_ID|RESP_MODEL|RESP_DONE|USAGE)$/.test(op)) cls = 'asm-opcode-resp';
+    let h = rest.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, '<span class="asm-string">"$1"</span>')
+               .replace(/\b(\d+\.?\d*)\b/g, '<span class="asm-number">$1</span>')
+               .replace(/(\{[^}]*\})/g, '<span class="asm-json">$1</span>');
+    return `${pad}<span class="${cls}">${op}</span>${h}`;
+  }).join('\n');
+}
+</script>
+</body>
+</html>

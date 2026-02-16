@@ -77,7 +77,7 @@ func (p *GoogleGenAIParser) ParseRequest(body []byte) (*Program, error) {
 				Name        string          `json:"name"`
 				Description string          `json:"description,omitempty"`
 				Parameters  json.RawMessage `json:"parameters,omitempty"`
-			} `json:"function_declarations,omitempty"`
+			} `json:"functionDeclarations,omitempty"`
 		}
 		if json.Unmarshal(toolsRaw, &toolSets) == nil {
 			prog.Emit(DEF_START)

@@ -182,7 +182,7 @@ func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 		case DEF_END:
 			if inToolDefs && len(funcDecls) > 0 {
 				tools = append(tools, map[string]any{
-					"function_declarations": funcDecls,
+					"functionDeclarations": funcDecls,
 				})
 			}
 			inToolDefs = false

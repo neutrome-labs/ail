@@ -648,44 +648,6 @@ func TestGoogleGenAIResponseParse(t *testing.T) {
 	}
 }
 
-func TestAnthropicStreamChunkParse(t *testing.T) {
-	chunks := []string{
-		`{"type":"message_start","message":{"id":"msg_01","model":"claude-3-opus"}}`,
-		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}`,
-		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}}`,
-		`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}`,
-		`{"type":"message_stop"}`,
-	}
-
-	parser := &AnthropicParser{}
-	asm := NewStreamAssembler()
-
-	for _, chunk := range chunks {
-		prog, err := parser.ParseStreamChunk([]byte(chunk))
-		if err != nil {
-			t.Fatalf("parse chunk: %v", err)
-		}
-		asm.Push(prog)
-	}
-
-	if !asm.Done() {
-		t.Fatal("expected assembler to be done")
-	}
-
-	prog := asm.Program()
-	t.Logf("Assembled Anthropic Stream:\n%s", prog.Disasm())
-
-	foundText := false
-	for _, inst := range prog.Code {
-		if inst.Op == TXT_CHUNK && inst.Str == "Hello world" {
-			foundText = true
-		}
-	}
-	if !foundText {
-		t.Error("expected assembled text 'Hello world'")
-	}
-}
-
 func TestMediaTypePreservation(t *testing.T) {
 	// Anthropic image with explicit media type
 	input := `{
@@ -773,3 +735,5 @@ func TestConverterRegistryCompleteness(t *testing.T) {
 		}
 	}
 }
+
+

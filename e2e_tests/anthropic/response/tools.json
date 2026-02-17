@@ -1,0 +1,21 @@
+{
+  "id": "msg_012345",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-3-opus-20240229",
+  "content": [
+    {
+      "type": "text",
+      "text": "I can verify that for you."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_01",
+      "name": "get_ticker_symbol",
+      "input": {"company_name": "Apple"}
+    }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {"input_tokens": 50, "output_tokens": 20}
+}

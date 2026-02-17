@@ -1,0 +1,9 @@
+{
+  "candidates": [
+    {
+      "content": {"parts": [{"text": "Hello"}], "role": "model"},
+      "index": 0
+    }
+  ],
+  "modelVersion": "gemini-1.5-pro"
+}

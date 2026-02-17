@@ -90,17 +90,6 @@ func (p *Program) EmitRef(op Opcode, ref uint32) {
 	p.Code = append(p.Code, Instruction{Op: op, Ref: ref})
 }
 
-// EmitComment appends a COMMENT instruction. Comments are preserved in binary
-// encoding and shown as "; text" in disassembly, but are ignored by emitters.
-func (p *Program) EmitComment(text string) {
-	p.Code = append(p.Code, Instruction{Op: COMMENT, Str: text})
-}
-
-// PrependComment inserts a COMMENT instruction at the very beginning of the program.
-func (p *Program) PrependComment(text string) {
-	p.Code = append([]Instruction{{Op: COMMENT, Str: text}}, p.Code...)
-}
-
 // AddBuffer appends data to the side-buffer and returns its index.
 func (p *Program) AddBuffer(data []byte) uint32 {
 	idx := uint32(len(p.Buffers))
@@ -225,22 +214,14 @@ func (p *Program) Disasm() string {
 			sb.WriteString("  ")
 		}
 
-		// Comments render with "; " prefix instead of opcode name
-		if inst.Op == COMMENT {
-			sb.WriteString("; ")
-			sb.WriteString(inst.Str)
-			sb.WriteByte('\n')
-			continue
-		}
-
 		sb.WriteString(inst.Op.Name())
 
 		switch inst.Op {
 		case TXT_CHUNK, DEF_NAME, DEF_DESC, CALL_START, CALL_NAME,
 			RESULT_START, RESULT_DATA, RESP_ID, RESP_MODEL, RESP_DONE,
 			SET_MODEL, SET_STOP, STREAM_DELTA:
-			sb.WriteString(" ")
-			sb.WriteString(fmt.Sprintf("%q", inst.Str))
+			sb.WriteByte(' ')
+			sb.WriteString(inst.Str)
 
 		case SET_TEMP, SET_TOPP:
 			sb.WriteString(fmt.Sprintf(" %.4f", inst.Num))
@@ -252,14 +233,19 @@ func (p *Program) Disasm() string {
 			sb.WriteString(fmt.Sprintf(" ref:%d", inst.Ref))
 
 		case DEF_SCHEMA, CALL_ARGS, USAGE, STREAM_TOOL_DELTA:
-			sb.WriteString(" ")
+			sb.WriteByte(' ')
 			sb.Write(inst.JSON)
 
 		case SET_META:
-			sb.WriteString(fmt.Sprintf(" %q %q", inst.Key, inst.Str))
+			sb.WriteByte(' ')
+			sb.WriteString(inst.Key)
+			sb.WriteByte(' ')
+			sb.WriteString(inst.Str)
 
 		case EXT_DATA:
-			sb.WriteString(fmt.Sprintf(" %q ", inst.Key))
+			sb.WriteByte(' ')
+			sb.WriteString(inst.Key)
+			sb.WriteByte(' ')
 			sb.Write(inst.JSON)
 		}
 

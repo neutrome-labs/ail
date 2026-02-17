@@ -1,0 +1,11 @@
+{
+  "id": "msg_prefill",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {"type": "text", "text": "\"foo\": 1, \"bar\": 2}"}
+  ],
+  "stop_reason": "end_turn",
+  "model": "claude-3-opus-20240229",
+  "usage": {"input_tokens": 20, "output_tokens": 15}
+}

@@ -1,0 +1,18 @@
+{
+  "model": "claude-3-opus-20240229",
+  "temperature": 0.5,
+  "max_tokens": 2048,
+  "system": "You are a helpful assistant.",
+  "messages": [
+    {"role": "user", "content": "Hello!"},
+    {"role": "assistant", "content": "Hi there! How can I help you?"},
+    {"role": "user", "content": "What is 2+2?"}
+  ],
+  "tools": [
+    {
+      "name": "calculator",
+      "description": "Evaluate a math expression",
+      "input_schema": {"type": "object", "properties": {"expr": {"type": "string"}}}
+    }
+  ]
+}

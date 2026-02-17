@@ -1,0 +1,11 @@
+{
+  "id": "msg_long",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {"type": "text", "text": "You're welcome!"}
+  ],
+  "stop_reason": "end_turn",
+  "model": "claude-3-opus-20240229",
+  "usage": {"input_tokens": 50, "output_tokens": 5}
+}

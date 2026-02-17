@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-12345",
+  "object": "chat.completion",
+  "created": 1677652289,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "The image shows a wooden boardwalk extending through a vibrant green grassy field under a bright blue sky with scattered clouds. In the distance, there are trees and shrubs."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 100,
+    "completion_tokens": 50,
+    "total_tokens": 150
+  }
+}

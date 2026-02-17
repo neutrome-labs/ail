@@ -1,0 +1,14 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [{"text": "It's a cat."}]
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {"promptTokenCount": 300, "candidatesTokenCount": 5, "totalTokenCount": 305},
+  "modelVersion": "gemini-1.5-pro"
+}

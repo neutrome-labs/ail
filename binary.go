@@ -54,7 +54,7 @@ func (p *Program) Encode(w io.Writer) error {
 		// String arg
 		case TXT_CHUNK, DEF_NAME, DEF_DESC, CALL_START, CALL_NAME,
 			RESULT_START, RESULT_DATA, RESP_ID, RESP_MODEL, RESP_DONE,
-			SET_MODEL, SET_STOP, STREAM_DELTA, COMMENT:
+			SET_MODEL, SET_STOP, STREAM_DELTA:
 			if err := writeString(w, inst.Str); err != nil {
 				return err
 			}
@@ -164,7 +164,7 @@ func Decode(r io.Reader) (*Program, error) {
 		// String arg
 		case TXT_CHUNK, DEF_NAME, DEF_DESC, CALL_START, CALL_NAME,
 			RESULT_START, RESULT_DATA, RESP_ID, RESP_MODEL, RESP_DONE,
-			SET_MODEL, SET_STOP, STREAM_DELTA, COMMENT:
+			SET_MODEL, SET_STOP, STREAM_DELTA:
 			s, err := readString(r)
 			if err != nil {
 				return nil, fmt.Errorf("ail.Decode %s: %w", op.Name(), err)

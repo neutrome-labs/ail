@@ -1,0 +1,10 @@
+{
+  "model": "gpt-4-turbo",
+  "instructions": "Be verbose.",
+  "input": [
+    {"role": "user", "content": "Tell me a story."},
+    {"role": "assistant", "content": "Once upon a time..."},
+    {"role": "user", "content": "Continue."}
+  ],
+  "max_output_tokens": 1000
+}

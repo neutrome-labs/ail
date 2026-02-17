@@ -1,0 +1,16 @@
+{
+  "model": "gemini-1.5-pro",
+  "contents": [
+    {"role": "user", "parts": [{"text": "Say something controversial."}]}
+  ],
+  "safety_settings": [
+    {
+      "category": "HARM_CATEGORY_HATE_SPEECH",
+      "threshold": "BLOCK_LOW_AND_ABOVE"
+    },
+    {
+      "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+      "threshold": "BLOCK_NONE"
+    }
+  ]
+}

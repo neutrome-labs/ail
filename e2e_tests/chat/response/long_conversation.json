@@ -1,0 +1,19 @@
+{
+  "id": "chatcmpl-67890",
+  "object": "chat.completion",
+  "created": 1677652290,
+  "model": "gpt-3.5-turbo-0613",
+  "choices": [{
+    "index": 0,
+    "message": {
+      "role": "assistant",
+      "content": "Corey Seager was named the World Series MVP."
+    },
+    "finish_reason": "stop"
+  }],
+  "usage": {
+    "prompt_tokens": 56,
+    "completion_tokens": 10,
+    "total_tokens": 66
+  }
+}

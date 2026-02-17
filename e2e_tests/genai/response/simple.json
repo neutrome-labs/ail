@@ -1,0 +1,11 @@
+{
+  "candidates": [
+    {
+      "content": {"parts": [{"text": "Hello! How can I help you today?"}], "role": "model"},
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {"promptTokenCount": 12, "candidatesTokenCount": 8, "totalTokenCount": 20},
+  "modelVersion": "gemini-1.5-pro"
+}

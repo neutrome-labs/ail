@@ -1,0 +1,9 @@
+{
+  "model": "claude-3-opus",
+  "temperature": 1.0,
+  "frequency_penalty": 0.5,
+  "presence_penalty": 0.5,
+  "input": [
+    {"role": "user", "content": "Generate random words."}
+  ]
+}

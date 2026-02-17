@@ -1,0 +1,11 @@
+{
+  "model": "claude-3-opus-20240229",
+  "messages": [
+    {"role": "user", "content": "How's the weather?"},
+    {"role": "assistant", "content": "It's sunny."},
+    {"role": "user", "content": "Are you sure?"},
+    {"role": "assistant", "content": "Yes, I checked the forecast."},
+    {"role": "user", "content": "Thanks."}
+  ],
+  "max_tokens": 1024
+}

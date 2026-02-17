@@ -1,0 +1,11 @@
+{
+  "id": "msg_vision",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-3-opus-20240229",
+  "content": [
+    {"type": "text", "text": "This is a picture of a cat."}
+  ],
+  "stop_reason": "end_turn",
+  "usage": {"input_tokens": 1000, "output_tokens": 10}
+}

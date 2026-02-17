@@ -80,17 +80,6 @@ emitter, _ := ail.GetEmitter(ail.StyleAnthropic)
 out, _ := emitter.EmitRequest(prog)
 ```
 
-### Reassemble a stream into a complete response
-
-```go
-asm := ail.NewStreamAssembler()
-for chunk := range chunks {
-    prog, _ := parser.ParseStreamChunk(chunk)
-    asm.Push(prog)
-}
-full := asm.Program() // complete response as an AIL program
-```
-
 ### Pass programs through context
 
 ```go
@@ -118,10 +107,10 @@ prog, ok := ail.ProgramFromContext(ctx)
 
 ```asm
 ; AIL Representation (prog.Disasm() output)
-SET_MODEL "gpt-5-mini"
+SET_MODEL gpt-5-mini
 MSG_START
   ROLE_USR
-  TXT_CHUNK "How many r's are in the word 'strawberry'?"
+  TXT_CHUNK How many r's are in the word 'strawberry'?
 MSG_END
 ```
 
@@ -212,8 +201,6 @@ p.Emit(ail.MSG_START)
 p.Emit(ail.ROLE_USR)
 p.EmitString(ail.TXT_CHUNK, "Hello")
 p.Emit(ail.MSG_END)
-p.EmitComment("added by my plugin")
-
 fmt.Println(p.GetModel())     // "gpt-4o"
 fmt.Println(p.IsStreaming())   // false
 fmt.Println(p.Len())          // 7
@@ -241,22 +228,6 @@ outputs, _ := conv.PushProgram(prog)
 
 // Flush remaining buffered data at end of stream
 final, _ := conv.Flush()
-```
-
-### StreamAssembler
-
-`StreamAssembler` accumulates parsed streaming chunks into a complete response `Program`. It reassembles fragmented tool-call arguments and tracks metadata across chunks:
-
-```go
-asm := ail.NewStreamAssembler()
-for chunk := range chunks {
-    prog, _ := parser.ParseStreamChunk(chunk)
-    asm.Push(prog)
-}
-if asm.Done() {
-    full := asm.Program()
-}
-asm.Reset() // reuse for next stream
 ```
 
 ## Binary Encoding
@@ -363,12 +334,6 @@ prog, err := ail.Decode(&buf)
 | `STREAM_TOOL_DELTA` | `0x62` | JSON   | Tool call argument delta       |
 | `STREAM_END`        | `0x63` | -      | End streaming response         |
 
-### Annotation (0xE0–0xEF)
-
-| Mnemonic  | Byte   | Args   | Description                                    |
-|-----------|--------|--------|------------------------------------------------|
-| `COMMENT` | `0xE0` | String | Human-readable comment (ignored by emitters)   |
-
 ### Configuration (0xF0–0xFF)
 
 | Mnemonic    | Byte   | Args     | Description                          |
@@ -381,8 +346,6 @@ prog, err := ail.Decode(&buf)
 | `SET_STREAM`| `0xF5` | -        | Enable streaming mode                |
 | `EXT_DATA`  | `0xFE` | Key,JSON | Provider-specific extension data     |
 | `SET_META`  | `0xFF` | Key,Val  | Set arbitrary metadata key=value     |
-
-Comments survive binary encoding/decoding and are rendered as `; text` in disassembly output. They are silently skipped by all emitters and the stream converter, making them safe for annotations, debugging notes, and provenance markers.
 
 ## Provider Mapping Details
 
@@ -503,7 +466,6 @@ Plugins operate on the `Program` directly rather than provider-specific JSON:
 ```go
 // Inject a system prompt at the beginning
 prefix := ail.NewProgram()
-prefix.EmitComment("Injected by guardrails plugin")
 prefix.Emit(ail.MSG_START)
 prefix.Emit(ail.ROLE_SYS)
 prefix.EmitString(ail.TXT_CHUNK, "Always be helpful and safe.")
@@ -516,26 +478,25 @@ result := prefix.Append(prog) // buffer refs are re-indexed automatically
 `Program.Disasm()` produces a human-readable assembly listing with automatic indentation inside block opcodes:
 
 ```asm
-SET_MODEL "gpt-4o"
+SET_MODEL gpt-4o
 SET_TEMP 0.1000
-; This request was converted from Anthropic format
 MSG_START
   ROLE_SYS
-  TXT_CHUNK "Be brief."
+  TXT_CHUNK Be brief.
 MSG_END
 MSG_START
   ROLE_USR
-  TXT_CHUNK "Hello"
+  TXT_CHUNK Hello
 MSG_END
 SET_STREAM
 DEF_START
-  DEF_NAME "get_weather"
-  DEF_DESC "Get current weather for a location"
+  DEF_NAME get_weather
+  DEF_DESC Get current weather for a location
   DEF_SCHEMA {"type":"object","properties":{"location":{"type":"string"}}}
 DEF_END
 ```
 
-Comments are prefixed with `;` and can appear anywhere in the instruction stream. They survive binary encoding/decoding and are ignored during emission.
+Comments prefixed with `;` can appear in assembly text and are silently ignored by the parser.
 
 ### Binary Layout Example
 

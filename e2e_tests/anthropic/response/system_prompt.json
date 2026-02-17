@@ -1,0 +1,11 @@
+{
+  "id": "msg_system",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {"type": "text", "text": "Are you sure? Sometimes it looks grey or orange."}
+  ],
+  "stop_reason": "end_turn",
+  "model": "claude-3-opus-20240229",
+  "usage": {"input_tokens": 30, "output_tokens": 15}
+}

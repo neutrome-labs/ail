@@ -1,0 +1,38 @@
+{
+  "id": "chatcmpl-parallel",
+  "object": "chat.completion",
+  "created": 1700000001,
+  "model": "gpt-4o",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "get_current_weather", "arguments": "{\"location\": \"San Francisco, CA\"}"}
+          },
+          {
+            "id": "call_2",
+            "type": "function",
+            "function": {"name": "get_current_weather", "arguments": "{\"location\": \"Tokyo, Japan\"}"}
+          },
+          {
+            "id": "call_3",
+            "type": "function",
+            "function": {"name": "get_current_weather", "arguments": "{\"location\": \"Paris, France\"}"}
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 50,
+    "completion_tokens": 100,
+    "total_tokens": 150
+  }
+}

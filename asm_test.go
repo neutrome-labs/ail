@@ -49,10 +49,10 @@ func TestAsmDisasmRoundTrip(t *testing.T) {
 
 func TestAsmWithComment(t *testing.T) {
 	text := `; This is a comment
-SET_MODEL "test-model"
+SET_MODEL test-model
 MSG_START
   ROLE_SYS
-  TXT_CHUNK "You are helpful"
+  TXT_CHUNK You are helpful
 MSG_END
 `
 	prog, err := Asm(text)
@@ -60,14 +60,12 @@ MSG_END
 		t.Fatalf("Asm failed: %v", err)
 	}
 
-	if prog.Code[0].Op != COMMENT {
-		t.Errorf("expected COMMENT, got %s", prog.Code[0].Op)
+	// Comments are silently skipped — first instruction should be SET_MODEL
+	if prog.Code[0].Op != SET_MODEL || prog.Code[0].Str != "test-model" {
+		t.Errorf("expected SET_MODEL, got %s", prog.Code[0].Op)
 	}
-	if prog.Code[0].Str != "This is a comment" {
-		t.Errorf("comment text: %q", prog.Code[0].Str)
-	}
-	if prog.Code[1].Op != SET_MODEL || prog.Code[1].Str != "test-model" {
-		t.Errorf("SET_MODEL: %v", prog.Code[1])
+	if len(prog.Code) != 5 {
+		t.Errorf("expected 5 instructions (comment skipped), got %d", len(prog.Code))
 	}
 }
 
@@ -109,7 +107,7 @@ func TestAsmJSON(t *testing.T) {
 }
 
 func TestAsmSetMeta(t *testing.T) {
-	text := `SET_META "key" "value"
+	text := `SET_META key value
 `
 	prog, err := Asm(text)
 	if err != nil {
@@ -122,7 +120,7 @@ func TestAsmSetMeta(t *testing.T) {
 }
 
 func TestAsmExtData(t *testing.T) {
-	text := `EXT_DATA "provider" {"foo":"bar"}
+	text := `EXT_DATA provider {"foo":"bar"}
 `
 	prog, err := Asm(text)
 	if err != nil {
@@ -161,7 +159,6 @@ TXT_REF ref:2
 func TestAsmFullRoundTrip(t *testing.T) {
 	// Build a complex program
 	orig := NewProgram()
-	orig.EmitComment("Request sample")
 	orig.EmitString(SET_MODEL, "openai/gpt-4")
 	orig.EmitFloat(SET_TEMP, 0.7)
 	orig.EmitFloat(SET_TOPP, 0.95)
@@ -207,11 +204,11 @@ func TestAsmFullRoundTrip(t *testing.T) {
 
 func TestAsmSampleFile(t *testing.T) {
 	// Replicate the exact format of a sample .ail.txt file
-	text := `SET_MODEL "semantyka/enei-1-chat+slwin"
+	text := `SET_MODEL semantyka/enei-1-chat+slwin
 SET_STREAM
 MSG_START
   ROLE_USR
-  TXT_CHUNK "How many r` + "`" + `s are in the word ` + "`" + `strawberry?` + "`" + `"
+  TXT_CHUNK How many r` + "`" + `s are in the word ` + "`" + `strawberry?` + "`" + `
 MSG_END
 `
 	prog, err := Asm(text)
@@ -234,12 +231,5 @@ func TestAsmInvalidOpcode(t *testing.T) {
 	_, err := Asm("INVALID_OP\n")
 	if err == nil {
 		t.Error("expected error for unknown opcode")
-	}
-}
-
-func TestAsmInvalidString(t *testing.T) {
-	_, err := Asm("SET_MODEL not-quoted\n")
-	if err == nil {
-		t.Error("expected error for unquoted string")
 	}
 }

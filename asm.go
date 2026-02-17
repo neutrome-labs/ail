@@ -17,7 +17,7 @@ func init() {
 	}
 }
 
-// opcodes that take a single quoted-string argument.
+// opcodes that take a plain string argument (rest of line after opcode).
 var stringArgOps = map[Opcode]bool{
 	TXT_CHUNK: true, DEF_NAME: true, DEF_DESC: true,
 	CALL_START: true, CALL_NAME: true,
@@ -48,8 +48,8 @@ var refArgOps = map[Opcode]bool{
 
 // Asm parses a human-readable assembly listing (as produced by Disasm) back
 // into an AIL Program. Lines are separated by newlines; leading whitespace
-// (indentation) is ignored. Comment lines starting with "; " are preserved
-// as COMMENT instructions.
+// (indentation) is ignored. Comment lines starting with ";" are silently
+// skipped (real-asm style).
 //
 // This is the inverse of Program.Disasm().
 func Asm(text string) (*Program, error) {
@@ -62,13 +62,8 @@ func Asm(text string) (*Program, error) {
 			continue
 		}
 
-		// Comment lines: "; <text>"
-		if strings.HasPrefix(line, "; ") {
-			prog.EmitComment(line[2:])
-			continue
-		}
-		if line == ";" {
-			prog.EmitComment("")
+		// Comment lines: skip anything starting with ";"
+		if strings.HasPrefix(line, ";") {
 			continue
 		}
 
@@ -81,11 +76,7 @@ func Asm(text string) (*Program, error) {
 
 		switch {
 		case stringArgOps[op]:
-			s, err := parseQuotedString(rest, lineNo)
-			if err != nil {
-				return nil, err
-			}
-			prog.EmitString(op, s)
+			prog.EmitString(op, rest)
 
 		case floatArgOps[op]:
 			f, err := strconv.ParseFloat(strings.TrimSpace(rest), 64)
@@ -116,18 +107,21 @@ func Asm(text string) (*Program, error) {
 			prog.EmitRef(op, ref)
 
 		case op == SET_META:
-			key, val, err := parseTwoQuotedStrings(rest, lineNo)
-			if err != nil {
-				return nil, err
+			key, val := splitFirst(rest)
+			if key == "" {
+				return nil, fmt.Errorf("line %d: SET_META requires key and value", lineNo+1)
 			}
 			prog.EmitKeyVal(op, key, val)
 
 		case op == EXT_DATA:
-			key, j, err := parseQuotedStringThenJSON(rest, lineNo)
-			if err != nil {
-				return nil, err
+			key, j := splitFirst(rest)
+			if key == "" || j == "" {
+				return nil, fmt.Errorf("line %d: EXT_DATA requires key and JSON", lineNo+1)
 			}
-			prog.EmitKeyJSON(op, key, j)
+			if !json.Valid([]byte(j)) {
+				return nil, fmt.Errorf("line %d: EXT_DATA invalid JSON: %s", lineNo+1, j)
+			}
+			prog.EmitKeyJSON(op, key, json.RawMessage(j))
 
 		default:
 			// No-arg opcodes: MSG_START, MSG_END, ROLE_*, SET_STREAM, DEF_START, DEF_END, etc.
@@ -146,74 +140,6 @@ func splitFirst(s string) (string, string) {
 		return s, ""
 	}
 	return s[:idx], s[idx+1:]
-}
-
-// parseQuotedString extracts a Go-style quoted string from the rest of a line.
-func parseQuotedString(rest string, lineNo int) (string, error) {
-	rest = strings.TrimSpace(rest)
-	if rest == "" {
-		return "", fmt.Errorf("line %d: expected quoted string argument", lineNo+1)
-	}
-	s, err := strconv.Unquote(rest)
-	if err != nil {
-		return "", fmt.Errorf("line %d: invalid quoted string %s: %w", lineNo+1, rest, err)
-	}
-	return s, nil
-}
-
-// parseTwoQuotedStrings parses 'key "val"' from the rest portion.
-func parseTwoQuotedStrings(rest string, lineNo int) (string, string, error) {
-	rest = strings.TrimSpace(rest)
-	// Find the end of the first quoted string
-	key, remaining, err := extractQuotedString(rest, lineNo)
-	if err != nil {
-		return "", "", fmt.Errorf("line %d: SET_META key: %w", lineNo+1, err)
-	}
-	val, err := parseQuotedString(remaining, lineNo)
-	if err != nil {
-		return "", "", fmt.Errorf("line %d: SET_META val: %w", lineNo+1, err)
-	}
-	return key, val, nil
-}
-
-// parseQuotedStringThenJSON parses '"key" {json...}' from the rest portion.
-func parseQuotedStringThenJSON(rest string, lineNo int) (string, json.RawMessage, error) {
-	rest = strings.TrimSpace(rest)
-	key, remaining, err := extractQuotedString(rest, lineNo)
-	if err != nil {
-		return "", nil, fmt.Errorf("line %d: EXT_DATA key: %w", lineNo+1, err)
-	}
-	j := strings.TrimSpace(remaining)
-	if !json.Valid([]byte(j)) {
-		return "", nil, fmt.Errorf("line %d: EXT_DATA invalid JSON: %s", lineNo+1, j)
-	}
-	return key, json.RawMessage(j), nil
-}
-
-// extractQuotedString reads the first Go-quoted string from s and returns
-// (unquoted value, remaining text after the closing quote).
-func extractQuotedString(s string, lineNo int) (string, string, error) {
-	if len(s) == 0 || s[0] != '"' {
-		return "", "", fmt.Errorf("line %d: expected '\"' at start of %q", lineNo+1, s)
-	}
-	// Walk through the string respecting escapes
-	i := 1
-	for i < len(s) {
-		if s[i] == '\\' {
-			i += 2
-			continue
-		}
-		if s[i] == '"' {
-			// Found the closing quote
-			val, err := strconv.Unquote(s[:i+1])
-			if err != nil {
-				return "", "", fmt.Errorf("line %d: invalid quoted string %s: %w", lineNo+1, s[:i+1], err)
-			}
-			return val, strings.TrimSpace(s[i+1:]), nil
-		}
-		i++
-	}
-	return "", "", fmt.Errorf("line %d: unterminated quoted string", lineNo+1)
 }
 
 // parseRef parses "ref:N" and returns N as uint32.

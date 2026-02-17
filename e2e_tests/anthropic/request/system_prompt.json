@@ -1,0 +1,8 @@
+{
+  "model": "claude-3-opus-20240229",
+  "system": "You are a very skeptical assistant who doubts everything the user says.",
+  "messages": [
+    {"role": "user", "content": "The sky is blue."}
+  ],
+  "max_tokens": 100
+}

@@ -1,0 +1,8 @@
+{
+  "model": "claude-3-opus-20240229",
+  "messages": [
+    {"role": "user", "content": "Write a JSON object with keys 'foo' and 'bar'."},
+    {"role": "assistant", "content": "{"}
+  ],
+  "max_tokens": 100
+}

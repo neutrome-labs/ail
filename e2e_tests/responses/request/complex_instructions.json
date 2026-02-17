@@ -1,0 +1,10 @@
+{
+  "model": "gpt-4o",
+  "instructions": "You are a coding assistant. Answer in Go only.",
+  "top_p": 0.5,
+  "temperature": 0.2,
+  "input": [
+    {"role": "user", "content": "How to sort a slice?"}
+  ],
+  "max_output_tokens": 2048
+}

@@ -1,0 +1,26 @@
+{
+  "model": "gemini-1.5-pro",
+  "contents": [
+    {
+      "role": "user",
+      "parts": [{"text": "What is the time in London?"}]
+    }
+  ],
+  "tools": [
+    {
+      "function_declarations": [
+        {
+          "name": "get_time",
+          "description": "Get current time for a location",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {"type": "string"}
+            },
+            "required": ["location"]
+          }
+        }
+      ]
+    }
+  ]
+}

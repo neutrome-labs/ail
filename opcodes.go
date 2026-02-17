@@ -67,11 +67,6 @@ const (
 	STREAM_END        Opcode = 0x63 // End streaming response
 )
 
-// ─── Annotation (0xE0-0xEF) ──────────────────────────────────────────────────
-const (
-	COMMENT Opcode = 0xE0 // arg: String — human-readable comment (ignored by emitters)
-)
-
 // ─── Configuration (0xF0-0xFF) ───────────────────────────────────────────────
 const (
 	SET_MODEL  Opcode = 0xF0 // arg: String
@@ -94,7 +89,6 @@ var opcodeNames = map[Opcode]string{
 	RESULT_START: "RESULT_START", RESULT_DATA: "RESULT_DATA", RESULT_END: "RESULT_END",
 	RESP_ID: "RESP_ID", RESP_MODEL: "RESP_MODEL", RESP_DONE: "RESP_DONE", USAGE: "USAGE",
 	STREAM_START: "STREAM_START", STREAM_DELTA: "STREAM_DELTA", STREAM_TOOL_DELTA: "STREAM_TOOL_DELTA", STREAM_END: "STREAM_END",
-	COMMENT: "COMMENT",
 	SET_MODEL: "SET_MODEL", SET_TEMP: "SET_TEMP", SET_TOPP: "SET_TOPP", SET_STOP: "SET_STOP",
 	SET_MAX: "SET_MAX", SET_STREAM: "SET_STREAM", EXT_DATA: "EXT_DATA", SET_META: "SET_META",
 }

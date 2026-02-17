@@ -1,0 +1,9 @@
+{
+  "model": "gemini-1.5-pro",
+  "system_instruction": {
+    "parts": [{"text": "You are a pirate."}]
+  },
+  "contents": [
+    {"role": "user", "parts": [{"text": "Hello"}]}
+  ]
+}

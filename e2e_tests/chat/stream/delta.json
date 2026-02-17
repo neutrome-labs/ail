@@ -1,0 +1,11 @@
+{
+  "id": "chatcmpl-abc",
+  "model": "gpt-4o",
+  "object": "chat.completion.chunk",
+  "choices": [
+    {
+      "index": 0,
+      "delta": {"content": "Hello"}
+    }
+  ]
+}

@@ -271,9 +271,9 @@ func TestChatCompletionsToGoogleConversion(t *testing.T) {
 		t.Errorf("role: got %v, want user", contents[0]["role"])
 	}
 
-	// generationConfig
+	// generation_config
 	var genConfig map[string]any
-	json.Unmarshal(result["generationConfig"], &genConfig)
+	json.Unmarshal(result["generation_config"], &genConfig)
 	if genConfig["temperature"] != 0.3 {
 		t.Errorf("temperature: got %v, want 0.3", genConfig["temperature"])
 	}
@@ -735,5 +735,3 @@ func TestConverterRegistryCompleteness(t *testing.T) {
 		}
 	}
 }
-
-

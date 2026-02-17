@@ -410,10 +410,10 @@ prog, err := ail.Decode(&buf)
 | `IMG_REF`    | `{"inlineData": {"mimeType": "...", "data": "..."}}` |
 | `DEF_*`      | `tools[].function_declarations[]`              |
 | `CALL_*`     | `functionCall` part                            |
-| `SET_TEMP`   | `generationConfig.temperature`                 |
-| `SET_TOPP`   | `generationConfig.topP`                        |
-| `SET_MAX`    | `generationConfig.maxOutputTokens`             |
-| `SET_STOP`   | `generationConfig.stopSequences`               |
+| `SET_TEMP`   | `generation_config.temperature`                 |
+| `SET_TOPP`   | `generation_config.topP`                        |
+| `SET_MAX`    | `generation_config.maxOutputTokens`             |
+| `SET_STOP`   | `generation_config.stopSequences`               |
 | `RESP_DONE`  | Finish reason mapped: `stop`↔`STOP`, `length`↔`MAX_TOKENS` |
 
 ## Theory of Operation

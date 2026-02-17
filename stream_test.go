@@ -582,5 +582,3 @@ func assertJSONField(t *testing.T, data []byte, field, expected string) {
 		t.Errorf("assertJSONField: %s=%v, want %s", field, got, expected)
 	}
 }
-
-

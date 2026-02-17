@@ -121,32 +121,6 @@ func ConvertRequest(body []byte, from, to Style) ([]byte, error) {
 	return emitter.EmitRequest(prog)
 }
 
-// ConvertRequestProgram parses a request into AIL, then emits for the target style.
-// Returns both the program (for plugin inspection) and the emitted bytes.
-func ConvertRequestProgram(body []byte, from, to Style) (*Program, []byte, error) {
-	parser, err := GetParser(from)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	prog, err := parser.ParseRequest(body)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	emitter, err := GetEmitter(to)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	out, err := emitter.EmitRequest(prog)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return prog, out, nil
-}
-
 // ConvertResponse converts a non-streaming response body from one style to another.
 func ConvertResponse(body []byte, from, to Style) ([]byte, error) {
 	parser, err := GetResponseParser(from)

@@ -8,7 +8,7 @@
   ],
   "tools": [
     {
-      "function_declarations": [
+      "functionDeclarations": [
         {
           "name": "get_time",
           "description": "Get current time for a location",

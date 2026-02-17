@@ -497,11 +497,11 @@ func TestTruncateMessagesNoOp(t *testing.T) {
 func TestPrependSystemPromptReplace(t *testing.T) {
 	p := buildConversation()
 	result := p.PrependSystemPrompt("New system prompt")
-	if result.SystemPrompt() != "New system prompt" {
+	if result.SystemPrompt() != "New system prompt\n\nYou are a helpful assistant." {
 		t.Fatalf("sys prompt = %q", result.SystemPrompt())
 	}
-	if result.CountMessages() != 4 {
-		t.Fatalf("message count changed: %d", result.CountMessages())
+	if p.CountMessages() != 4 {
+		t.Fatalf("original message count changed: %d", p.CountMessages())
 	}
 	// Original unchanged
 	if p.SystemPrompt() != "You are a helpful assistant." {

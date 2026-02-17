@@ -2,6 +2,7 @@ package ail
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -231,5 +232,101 @@ func TestAsmInvalidOpcode(t *testing.T) {
 	_, err := Asm("INVALID_OP\n")
 	if err == nil {
 		t.Error("expected error for unknown opcode")
+	}
+}
+
+// TestAsmDisasmBufferRoundTrip verifies that programs containing side-buffers
+// (IMG_REF, AUD_REF, TXT_REF) survive a Disasm → Asm cycle with their buffer
+// data intact.
+func TestAsmDisasmBufferRoundTrip(t *testing.T) {
+	imgData := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A} // PNG magic
+	audData := []byte{0xFF, 0xFB, 0x90, 0x00}                         // MP3 frame header
+	txtData := []byte("large text blob")
+
+	orig := NewProgram()
+	imgRef := orig.AddBuffer(imgData)
+	audRef := orig.AddBuffer(audData)
+	txtRef := orig.AddBuffer(txtData)
+
+	orig.EmitString(SET_MODEL, "openai/gpt-4o")
+	orig.Emit(MSG_START)
+	orig.Emit(ROLE_USR)
+	orig.EmitRef(IMG_REF, imgRef)
+	orig.EmitRef(AUD_REF, audRef)
+	orig.EmitRef(TXT_REF, txtRef)
+	orig.EmitString(TXT_CHUNK, "Describe all three.")
+	orig.Emit(MSG_END)
+
+	disasm := orig.Disasm()
+	t.Logf("Disasm with buffers:\n%s", disasm)
+
+	// Must contain .ref directives
+	if !strings.Contains(disasm, ".ref 0 ") {
+		t.Error("Disasm missing .ref 0 directive")
+	}
+	if !strings.Contains(disasm, ".ref 1 ") {
+		t.Error("Disasm missing .ref 1 directive")
+	}
+	if !strings.Contains(disasm, ".ref 2 ") {
+		t.Error("Disasm missing .ref 2 directive")
+	}
+
+	got, err := Asm(disasm)
+	if err != nil {
+		t.Fatalf("Asm failed: %v", err)
+	}
+
+	if len(got.Buffers) != 3 {
+		t.Fatalf("expected 3 buffers after Asm, got %d", len(got.Buffers))
+	}
+	if !bytes.Equal(got.Buffers[0], imgData) {
+		t.Errorf("buffer 0 mismatch: %v != %v", got.Buffers[0], imgData)
+	}
+	if !bytes.Equal(got.Buffers[1], audData) {
+		t.Errorf("buffer 1 mismatch: %v != %v", got.Buffers[1], audData)
+	}
+	if !bytes.Equal(got.Buffers[2], txtData) {
+		t.Errorf("buffer 2 mismatch: %v != %v", got.Buffers[2], txtData)
+	}
+	if len(got.Code) != len(orig.Code) {
+		t.Fatalf("instruction count mismatch: got %d, want %d", len(got.Code), len(orig.Code))
+	}
+}
+
+// TestAsmManualRefDirective tests writing .ref / IMG_REF by hand (no prior Disasm).
+func TestAsmManualRefDirective(t *testing.T) {
+	// User manually authors a .ail.txt with an embedded image.
+	// base64 of 4 bytes: 0x01 0x02 0x03 0x04 → "AQIDBA=="
+	text := `.ref 0 AQIDBA==
+
+SET_MODEL openai/gpt-4o
+MSG_START
+  ROLE_USR
+  IMG_REF ref:0
+  TXT_CHUNK What is in this image?
+MSG_END
+`
+	prog, err := Asm(text)
+	if err != nil {
+		t.Fatalf("Asm failed: %v", err)
+	}
+	if len(prog.Buffers) != 1 {
+		t.Fatalf("expected 1 buffer, got %d", len(prog.Buffers))
+	}
+	if !bytes.Equal(prog.Buffers[0], []byte{0x01, 0x02, 0x03, 0x04}) {
+		t.Errorf("buffer mismatch: %v", prog.Buffers[0])
+	}
+	// Find IMG_REF and check it points to ref 0
+	found := false
+	for _, inst := range prog.Code {
+		if inst.Op == IMG_REF {
+			found = true
+			if inst.Ref != 0 {
+				t.Errorf("IMG_REF.Ref = %d, want 0", inst.Ref)
+			}
+		}
+	}
+	if !found {
+		t.Error("IMG_REF instruction not found")
 	}
 }

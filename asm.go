@@ -1,6 +1,7 @@
 package ail
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -64,6 +65,29 @@ func Asm(text string) (*Program, error) {
 
 		// Comment lines: skip anything starting with ";"
 		if strings.HasPrefix(line, ";") {
+			continue
+		}
+
+		// Buffer declaration: ".ref N <base64>"
+		// Produced by Disasm() for IMG_REF / AUD_REF / TXT_REF payloads.
+		if strings.HasPrefix(line, ".ref ") {
+			parts := strings.SplitN(line[5:], " ", 2)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("line %d: .ref requires index and base64 data", lineNo+1)
+			}
+			idx, err := strconv.ParseUint(strings.TrimSpace(parts[0]), 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: .ref invalid index %q: %w", lineNo+1, parts[0], err)
+			}
+			data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(parts[1]))
+			if err != nil {
+				return nil, fmt.Errorf("line %d: .ref invalid base64: %w", lineNo+1, err)
+			}
+			// Grow Buffers slice to fit idx.
+			for uint32(len(prog.Buffers)) <= uint32(idx) {
+				prog.Buffers = append(prog.Buffers, nil)
+			}
+			prog.Buffers[idx] = data
 			continue
 		}
 

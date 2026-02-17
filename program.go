@@ -2,6 +2,7 @@ package ail
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -197,8 +198,22 @@ func (p *Program) SetModel(model string) {
 // ─── Disassembly (human-readable) ────────────────────────────────────────────
 
 // Disasm returns a human-readable assembly listing of the program.
+//
+// If the program contains side-buffers (images, audio, large text referenced by
+// IMG_REF / AUD_REF / TXT_REF), they are emitted as base64-encoded ".ref N"
+// directives at the very top, before any opcodes. Asm() understands this
+// format and round-trips them back into Program.Buffers.
 func (p *Program) Disasm() string {
 	var sb strings.Builder
+
+	// ── Buffer declarations ──────────────────────────────────────────────────
+	if len(p.Buffers) > 0 {
+		for i, buf := range p.Buffers {
+			sb.WriteString(fmt.Sprintf(".ref %d %s\n", i, base64.StdEncoding.EncodeToString(buf)))
+		}
+		sb.WriteByte('\n')
+	}
+
 	indent := 0
 	for _, inst := range p.Code {
 		// Decrease indent before END opcodes

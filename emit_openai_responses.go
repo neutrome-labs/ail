@@ -59,6 +59,9 @@ func (e *ResponsesEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			if currentMsg != nil {
 				if currentRole == "system" {
 					// Responses API: system goes to "instructions"
+					if systemText != "" && textContent != "" {
+						systemText += "\n\n"
+					}
 					systemText += textContent
 				} else {
 					currentMsg["role"] = currentRole

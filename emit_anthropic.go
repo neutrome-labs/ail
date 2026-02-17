@@ -161,6 +161,9 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			if inMessage {
 				if currentRole == "system" {
 					// Anthropic: system is top-level, not in messages
+					if systemText != "" && simpleText != "" {
+						systemText += "\n\n"
+					}
 					systemText += simpleText
 				} else {
 					msg := map[string]any{"role": currentRole}

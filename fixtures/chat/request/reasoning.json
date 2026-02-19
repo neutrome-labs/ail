@@ -1,0 +1,9 @@
+{
+  "model": "o4-mini",
+  "reasoning_effort": "high",
+  "messages": [
+    {"role": "user", "content": "What is the square root of 144?"},
+    {"role": "assistant", "content": "The square root of 144 is 12.", "reasoning_content": "I need to find the square root of 144. 12 times 12 equals 144."},
+    {"role": "user", "content": "And the cube root of 27?"}
+  ]
+}

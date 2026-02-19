@@ -63,6 +63,12 @@ func (p *ResponsesParser) ParseRequest(body []byte) (*Program, error) {
 		delete(raw, "stream")
 	}
 
+	// Reasoning config
+	if reasoningRaw, ok := raw["reasoning"]; ok {
+		prog.EmitJSON(SET_THINK, reasoningRaw)
+		delete(raw, "reasoning")
+	}
+
 	// Instructions → system message
 	if instrRaw, ok := raw["instructions"]; ok {
 		var instructions string

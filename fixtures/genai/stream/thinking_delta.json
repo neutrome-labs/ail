@@ -1,0 +1,13 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {"thought": true, "text": "Let me think about this"}
+        ]
+      },
+      "index": 0
+    }
+  ]
+}

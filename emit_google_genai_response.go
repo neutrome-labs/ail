@@ -13,6 +13,11 @@ func (e *GoogleGenAIEmitter) EmitResponse(prog *Program) ([]byte, error) {
 	var finishReason string
 	ec := NewExtrasCollector()
 
+	// Thinking block state
+	inThinking := false
+	var thinkingText string
+	var thinkingSig string
+
 	for _, inst := range prog.Code {
 		switch inst.Op {
 		case RESP_MODEL:
@@ -37,6 +42,28 @@ func (e *GoogleGenAIEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			inMessage = true
 			parts = nil
 			finishReason = ""
+
+		case THINK_START:
+			inThinking = true
+			thinkingText = ""
+			thinkingSig = ""
+		case THINK_CHUNK:
+			if inThinking {
+				thinkingText += inst.Str
+			}
+		case THINK_REF:
+			if inThinking && int(inst.Ref) < len(prog.Buffers) {
+				thinkingSig = string(prog.Buffers[inst.Ref])
+			}
+		case THINK_END:
+			if inThinking && inMessage {
+				p := map[string]any{"thought": true, "text": thinkingText}
+				if thinkingSig != "" {
+					p["thoughtSignature"] = thinkingSig
+				}
+				parts = append(parts, p)
+			}
+			inThinking = false
 
 		case TXT_CHUNK:
 			if inMessage {

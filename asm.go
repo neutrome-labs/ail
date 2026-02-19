@@ -26,6 +26,7 @@ var stringArgOps = map[Opcode]bool{
 	RESULT_START: true, RESULT_DATA: true,
 	RESP_ID: true, RESP_MODEL: true, RESP_DONE: true,
 	SET_MODEL: true, SET_STOP: true, STREAM_DELTA: true,
+	THINK_CHUNK: true, STREAM_THINK_DELTA: true,
 }
 
 // opcodes that take a float64 argument.
@@ -41,11 +42,12 @@ var intArgOps = map[Opcode]bool{
 // opcodes that take a raw JSON argument.
 var jsonArgOps = map[Opcode]bool{
 	DEF_SCHEMA: true, CALL_ARGS: true, USAGE: true, STREAM_TOOL_DELTA: true,
+	SET_THINK: true,
 }
 
 // opcodes that take a ref:N argument.
 var refArgOps = map[Opcode]bool{
-	IMG_REF: true, AUD_REF: true, TXT_REF: true,
+	IMG_REF: true, AUD_REF: true, TXT_REF: true, THINK_REF: true,
 }
 
 // Asm parses a human-readable assembly listing (as produced by Disasm) back

@@ -17,6 +17,10 @@ func (e *ChatCompletionsEmitter) EmitResponse(prog *Program) ([]byte, error) {
 	ec := NewExtrasCollector()
 	inMessage := false
 
+	// Reasoning content state
+	inThinking := false
+	var reasoningContent string
+
 	for _, inst := range prog.Code {
 		switch inst.Op {
 		case RESP_ID:
@@ -33,6 +37,8 @@ func (e *ChatCompletionsEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			currentMessage = make(map[string]any)
 			textContent = ""
 			toolCalls = nil
+			reasoningContent = ""
+			inThinking = false
 
 		case ROLE_AST:
 			if inMessage {
@@ -42,6 +48,20 @@ func (e *ChatCompletionsEmitter) EmitResponse(prog *Program) ([]byte, error) {
 		case TXT_CHUNK:
 			if inMessage {
 				textContent += inst.Str
+			}
+
+		case THINK_START:
+			inThinking = true
+			reasoningContent = ""
+
+		case THINK_CHUNK:
+			if inThinking {
+				reasoningContent += inst.Str
+			}
+
+		case THINK_REF, THINK_END:
+			if inst.Op == THINK_END {
+				inThinking = false
 			}
 
 		case CALL_START:
@@ -97,6 +117,9 @@ func (e *ChatCompletionsEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			if inMessage && currentChoice != nil {
 				if textContent != "" {
 					currentMessage["content"] = textContent
+				}
+				if reasoningContent != "" {
+					currentMessage["reasoning_content"] = reasoningContent
 				}
 				if len(toolCalls) > 0 {
 					currentMessage["tool_calls"] = toolCalls

@@ -37,6 +37,8 @@ func (e *ResponsesEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			result["max_output_tokens"] = inst.Int
 		case SET_STREAM:
 			result["stream"] = true
+		case SET_THINK:
+			result["reasoning"] = json.RawMessage(inst.JSON)
 
 		// Messages
 		case MSG_START:

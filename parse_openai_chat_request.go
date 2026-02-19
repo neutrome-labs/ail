@@ -86,6 +86,16 @@ func (p *ChatCompletionsParser) ParseRequest(body []byte) (*Program, error) {
 		delete(raw, "stream")
 	}
 
+	// Reasoning effort → thinking config
+	if effortRaw, ok := raw["reasoning_effort"]; ok {
+		var effort string
+		if json.Unmarshal(effortRaw, &effort) == nil && effort != "" {
+			cfg, _ := json.Marshal(map[string]string{"effort": effort})
+			prog.EmitJSON(SET_THINK, cfg)
+		}
+		delete(raw, "reasoning_effort")
+	}
+
 	// Tool definitions
 	if toolsRaw, ok := raw["tools"]; ok {
 		var rawTools []json.RawMessage
@@ -241,6 +251,17 @@ func (p *ChatCompletionsParser) ParseRequest(body []byte) (*Program, error) {
 					}
 				}
 				delete(msgMap, "content")
+			}
+
+			// Reasoning content (open models / DeepSeek / QwQ)
+			if rcRaw, ok := msgMap["reasoning_content"]; ok {
+				var rc string
+				if json.Unmarshal(rcRaw, &rc) == nil && rc != "" {
+					prog.Emit(THINK_START)
+					prog.EmitString(THINK_CHUNK, rc)
+					prog.Emit(THINK_END)
+				}
+				delete(msgMap, "reasoning_content")
 			}
 
 			// Tool calls in assistant messages

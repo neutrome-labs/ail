@@ -33,6 +33,16 @@ func (e *AnthropicEmitter) EmitStreamChunk(prog *Program) ([]byte, error) {
 			}
 			return json.Marshal(event)
 
+		case STREAM_THINK_DELTA:
+			event := map[string]any{
+				"type": "content_block_delta",
+				"delta": map[string]any{
+					"type":     "thinking_delta",
+					"thinking": inst.Str,
+				},
+			}
+			return json.Marshal(event)
+
 		case STREAM_TOOL_DELTA:
 			var td map[string]any
 			if json.Unmarshal(inst.JSON, &td) == nil {

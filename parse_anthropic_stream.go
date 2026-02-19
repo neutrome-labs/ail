@@ -43,14 +43,19 @@ func (p *AnthropicParser) ParseStreamChunk(body []byte) (*Program, error) {
 				ID   string `json:"id,omitempty"`
 				Name string `json:"name,omitempty"`
 			}
-			if json.Unmarshal(cbRaw, &cb) == nil && cb.Type == "tool_use" {
-				idx := 0
-				if idxRaw, ok := raw["index"]; ok {
-					json.Unmarshal(idxRaw, &idx)
+			if json.Unmarshal(cbRaw, &cb) == nil {
+				switch cb.Type {
+				case "tool_use":
+					idx := 0
+					if idxRaw, ok := raw["index"]; ok {
+						json.Unmarshal(idxRaw, &idx)
+					}
+					td := map[string]any{"index": idx, "id": cb.ID, "name": cb.Name}
+					j, _ := json.Marshal(td)
+					prog.EmitJSON(STREAM_TOOL_DELTA, j)
+				case "thinking":
+					// Thinking block started — emit nothing, deltas carry content
 				}
-				td := map[string]any{"index": idx, "id": cb.ID, "name": cb.Name}
-				j, _ := json.Marshal(td)
-				prog.EmitJSON(STREAM_TOOL_DELTA, j)
 			}
 		}
 
@@ -65,6 +70,13 @@ func (p *AnthropicParser) ParseStreamChunk(body []byte) (*Program, error) {
 				switch delta.Type {
 				case "text_delta":
 					prog.EmitString(STREAM_DELTA, delta.Text)
+				case "thinking_delta":
+					var thinkDelta struct {
+						Thinking string `json:"thinking"`
+					}
+					if json.Unmarshal(deltaRaw, &thinkDelta) == nil && thinkDelta.Thinking != "" {
+						prog.EmitString(STREAM_THINK_DELTA, thinkDelta.Thinking)
+					}
 				case "input_json_delta":
 					idx := 0
 					if idxRaw, ok := raw["index"]; ok {

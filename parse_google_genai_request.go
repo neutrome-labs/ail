@@ -29,24 +29,31 @@ func (p *GoogleGenAIParser) ParseRequest(body []byte) (*Program, error) {
 
 	// generation_config
 	if gcRaw, ok := raw["generation_config"]; ok {
-		var gc struct {
-			Temperature     *float64 `json:"temperature,omitempty"`
-			TopP            *float64 `json:"topP,omitempty"`
-			MaxOutputTokens *int32   `json:"maxOutputTokens,omitempty"`
-			StopSequences   []string `json:"stopSequences,omitempty"`
-		}
-		if json.Unmarshal(gcRaw, &gc) == nil {
-			if gc.Temperature != nil {
-				prog.EmitFloat(SET_TEMP, *gc.Temperature)
+		var gcMap map[string]json.RawMessage
+		if json.Unmarshal(gcRaw, &gcMap) == nil {
+			var gc struct {
+				Temperature     *float64 `json:"temperature,omitempty"`
+				TopP            *float64 `json:"topP,omitempty"`
+				MaxOutputTokens *int32   `json:"maxOutputTokens,omitempty"`
+				StopSequences   []string `json:"stopSequences,omitempty"`
 			}
-			if gc.TopP != nil {
-				prog.EmitFloat(SET_TOPP, *gc.TopP)
+			if json.Unmarshal(gcRaw, &gc) == nil {
+				if gc.Temperature != nil {
+					prog.EmitFloat(SET_TEMP, *gc.Temperature)
+				}
+				if gc.TopP != nil {
+					prog.EmitFloat(SET_TOPP, *gc.TopP)
+				}
+				if gc.MaxOutputTokens != nil {
+					prog.EmitInt(SET_MAX, *gc.MaxOutputTokens)
+				}
+				for _, s := range gc.StopSequences {
+					prog.EmitString(SET_STOP, s)
+				}
 			}
-			if gc.MaxOutputTokens != nil {
-				prog.EmitInt(SET_MAX, *gc.MaxOutputTokens)
-			}
-			for _, s := range gc.StopSequences {
-				prog.EmitString(SET_STOP, s)
+			// thinking_config inside generation_config
+			if tcRaw, ok := gcMap["thinking_config"]; ok {
+				prog.EmitJSON(SET_THINK, tcRaw)
 			}
 		}
 		delete(raw, "generation_config")
@@ -128,8 +135,10 @@ func (p *GoogleGenAIParser) ParseRequest(body []byte) (*Program, error) {
 		var contents []struct {
 			Role  string `json:"role"`
 			Parts []struct {
-				Text         string `json:"text,omitempty"`
-				FunctionCall *struct {
+				Text             string `json:"text,omitempty"`
+				Thought          *bool  `json:"thought,omitempty"`
+				ThoughtSignature string `json:"thoughtSignature,omitempty"`
+				FunctionCall     *struct {
 					Name string          `json:"name"`
 					Args json.RawMessage `json:"args"`
 				} `json:"functionCall,omitempty"`
@@ -157,7 +166,18 @@ func (p *GoogleGenAIParser) ParseRequest(body []byte) (*Program, error) {
 				}
 
 				for _, part := range content.Parts {
-					if part.Text != "" {
+					if part.Thought != nil && *part.Thought {
+						// Thinking part
+						prog.Emit(THINK_START)
+						if part.Text != "" {
+							prog.EmitString(THINK_CHUNK, part.Text)
+						}
+						if part.ThoughtSignature != "" {
+							ref := prog.AddBuffer([]byte(part.ThoughtSignature))
+							prog.EmitRef(THINK_REF, ref)
+						}
+						prog.Emit(THINK_END)
+					} else if part.Text != "" {
 						prog.EmitString(TXT_CHUNK, part.Text)
 					}
 					if part.FunctionCall != nil {

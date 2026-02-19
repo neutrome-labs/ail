@@ -27,6 +27,14 @@ const (
 	TXT_REF   Opcode = 0x23 // arg: RefID — large text buffer reference
 )
 
+// ─── Reasoning / Thinking (0x28-0x2B) ────────────────────────────────────────
+const (
+	THINK_START Opcode = 0x28 // Begin thinking/reasoning block within a message
+	THINK_CHUNK Opcode = 0x29 // arg: String — reasoning text content
+	THINK_END   Opcode = 0x2A // End thinking/reasoning block
+	THINK_REF   Opcode = 0x2B // arg: RefID — opaque reasoning blob (e.g., Gemini thoughtSignature)
+)
+
 // ─── Tool Definition (0x30-0x3F) ─────────────────────────────────────────────
 const (
 	DEF_START  Opcode = 0x30 // Begin tool definitions
@@ -61,10 +69,11 @@ const (
 
 // ─── Stream Events (0x60-0x6F) ───────────────────────────────────────────────
 const (
-	STREAM_START      Opcode = 0x60 // Begin streaming response
-	STREAM_DELTA      Opcode = 0x61 // arg: String — text delta
-	STREAM_TOOL_DELTA Opcode = 0x62 // arg: JSON — tool call delta
-	STREAM_END        Opcode = 0x63 // End streaming response
+	STREAM_START       Opcode = 0x60 // Begin streaming response
+	STREAM_DELTA       Opcode = 0x61 // arg: String — text delta
+	STREAM_TOOL_DELTA  Opcode = 0x62 // arg: JSON — tool call delta
+	STREAM_END         Opcode = 0x63 // End streaming response
+	STREAM_THINK_DELTA Opcode = 0x64 // arg: String — thinking/reasoning text delta
 )
 
 // ─── Configuration (0xF0-0xFF) ───────────────────────────────────────────────
@@ -75,6 +84,7 @@ const (
 	SET_STOP   Opcode = 0xF3 // arg: String
 	SET_MAX    Opcode = 0xF4 // arg: Int
 	SET_STREAM Opcode = 0xF5 // no arg — presence means streaming
+	SET_THINK  Opcode = 0xF6 // arg: JSON — thinking/reasoning configuration
 	EXT_DATA   Opcode = 0xFE // arg: Key, JSON — provider-specific extension
 	SET_META   Opcode = 0xFF // arg: Key, Val
 )
@@ -84,13 +94,15 @@ var opcodeNames = map[Opcode]string{
 	MSG_START: "MSG_START", MSG_END: "MSG_END",
 	ROLE_SYS: "ROLE_SYS", ROLE_USR: "ROLE_USR", ROLE_AST: "ROLE_AST", ROLE_TOOL: "ROLE_TOOL",
 	TXT_CHUNK: "TXT_CHUNK", IMG_REF: "IMG_REF", AUD_REF: "AUD_REF", TXT_REF: "TXT_REF",
+	THINK_START: "THINK_START", THINK_CHUNK: "THINK_CHUNK", THINK_END: "THINK_END", THINK_REF: "THINK_REF",
 	DEF_START: "DEF_START", DEF_NAME: "DEF_NAME", DEF_DESC: "DEF_DESC", DEF_SCHEMA: "DEF_SCHEMA", DEF_END: "DEF_END",
 	CALL_START: "CALL_START", CALL_NAME: "CALL_NAME", CALL_ARGS: "CALL_ARGS", CALL_END: "CALL_END",
 	RESULT_START: "RESULT_START", RESULT_DATA: "RESULT_DATA", RESULT_END: "RESULT_END",
 	RESP_ID: "RESP_ID", RESP_MODEL: "RESP_MODEL", RESP_DONE: "RESP_DONE", USAGE: "USAGE",
 	STREAM_START: "STREAM_START", STREAM_DELTA: "STREAM_DELTA", STREAM_TOOL_DELTA: "STREAM_TOOL_DELTA", STREAM_END: "STREAM_END",
-	SET_MODEL: "SET_MODEL", SET_TEMP: "SET_TEMP", SET_TOPP: "SET_TOPP", SET_STOP: "SET_STOP",
-	SET_MAX: "SET_MAX", SET_STREAM: "SET_STREAM", EXT_DATA: "EXT_DATA", SET_META: "SET_META",
+	STREAM_THINK_DELTA: "STREAM_THINK_DELTA",
+	SET_MODEL:          "SET_MODEL", SET_TEMP: "SET_TEMP", SET_TOPP: "SET_TOPP", SET_STOP: "SET_STOP",
+	SET_MAX: "SET_MAX", SET_STREAM: "SET_STREAM", SET_THINK: "SET_THINK", EXT_DATA: "EXT_DATA", SET_META: "SET_META",
 }
 
 // Name returns the human-readable mnemonic for an opcode.

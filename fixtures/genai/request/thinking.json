@@ -1,0 +1,16 @@
+{
+  "model": "gemini-2.5-flash",
+  "generation_config": {
+    "temperature": 0.3,
+    "maxOutputTokens": 512,
+    "thinking_config": {"thinking_budget": 8192}
+  },
+  "contents": [
+    {"role": "user", "parts": [{"text": "What is 2+2?"}]},
+    {"role": "model", "parts": [
+      {"thought": true, "text": "The user is asking a simple arithmetic question."},
+      {"text": "2 + 2 = 4."}
+    ]},
+    {"role": "user", "parts": [{"text": "And 3+3?"}]}
+  ]
+}

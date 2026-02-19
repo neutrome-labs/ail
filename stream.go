@@ -246,7 +246,7 @@ func (c *StreamConverter) splitForTarget(prog *Program) []*Program {
 		switch inst.Op {
 		case RESP_ID, RESP_MODEL:
 			meta = append(meta, inst)
-		case STREAM_START, STREAM_DELTA, STREAM_TOOL_DELTA, RESP_DONE, STREAM_END:
+		case STREAM_START, STREAM_DELTA, STREAM_THINK_DELTA, STREAM_TOOL_DELTA, RESP_DONE, STREAM_END:
 			events = append(events, []Instruction{inst})
 		case USAGE:
 			// Attach usage to the preceding RESP_DONE if exists.

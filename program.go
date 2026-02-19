@@ -114,7 +114,7 @@ func (p *Program) Append(other *Program) *Program {
 	for _, inst := range other.Code {
 		clone := cloneInstruction(inst)
 		switch inst.Op {
-		case IMG_REF, AUD_REF, TXT_REF:
+		case IMG_REF, AUD_REF, TXT_REF, THINK_REF:
 			clone.Ref += bufOffset
 		}
 		result.Code = append(result.Code, clone)

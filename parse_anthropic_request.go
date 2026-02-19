@@ -74,6 +74,12 @@ func (p *AnthropicParser) ParseRequest(body []byte) (*Program, error) {
 		delete(raw, "stream")
 	}
 
+	// Thinking configuration
+	if thinkRaw, ok := raw["thinking"]; ok {
+		prog.EmitJSON(SET_THINK, thinkRaw)
+		delete(raw, "thinking")
+	}
+
 	// System (top-level in Anthropic, not in messages)
 	if sysRaw, ok := raw["system"]; ok {
 		var sysStr string
@@ -177,6 +183,25 @@ func (p *AnthropicParser) ParseRequest(body []byte) (*Program, error) {
 										json.Unmarshal(textRaw, &text)
 									}
 									prog.EmitString(TXT_CHUNK, text)
+								case "thinking":
+									prog.Emit(THINK_START)
+									var thinking string
+									if thinkRaw, ok := blockMap["thinking"]; ok {
+										json.Unmarshal(thinkRaw, &thinking)
+									}
+									if thinking != "" {
+										prog.EmitString(THINK_CHUNK, thinking)
+									}
+									// Preserve signature if present
+									if sigRaw, ok := blockMap["signature"]; ok {
+										var sig string
+										if json.Unmarshal(sigRaw, &sig) == nil && sig != "" {
+											ref := prog.AddBuffer([]byte(sig))
+											prog.EmitRef(THINK_REF, ref)
+										}
+									}
+									prog.Emit(THINK_END)
+									continue // skip common tail
 								case "image":
 									if sourceRaw, ok := blockMap["source"]; ok {
 										var source struct {

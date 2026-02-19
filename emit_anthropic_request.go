@@ -23,6 +23,12 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 	needsToolResultWrap := false
 	var currentToolCallID string
 	var lastMediaType string
+	var thinkingConfig json.RawMessage
+
+	// Thinking block state
+	inThinking := false
+	var thinkingText string
+	var thinkingSignature string
 
 	// Tool definition state
 	var currentTool map[string]any
@@ -46,6 +52,9 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			stopSeqs = append(stopSeqs, inst.Str)
 		case SET_STREAM:
 			result["stream"] = true
+
+		case SET_THINK:
+			thinkingConfig = inst.JSON
 
 		// Messages
 		case MSG_START:
@@ -72,6 +81,42 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			if inMessage {
 				simpleText += inst.Str
 			}
+
+		case THINK_START:
+			inThinking = true
+			thinkingText = ""
+			thinkingSignature = ""
+
+		case THINK_CHUNK:
+			if inThinking {
+				thinkingText += inst.Str
+			}
+
+		case THINK_REF:
+			if inThinking && int(inst.Ref) < len(prog.Buffers) {
+				thinkingSignature = string(prog.Buffers[inst.Ref])
+			}
+
+		case THINK_END:
+			if inThinking && inMessage {
+				// Flush any text before thinking
+				if simpleText != "" {
+					contentBlocks = append(contentBlocks, map[string]any{
+						"type": "text",
+						"text": simpleText,
+					})
+					simpleText = ""
+				}
+				block := map[string]any{
+					"type":     "thinking",
+					"thinking": thinkingText,
+				}
+				if thinkingSignature != "" {
+					block["signature"] = thinkingSignature
+				}
+				contentBlocks = append(contentBlocks, block)
+			}
+			inThinking = false
 
 		case IMG_REF:
 			if inMessage {
@@ -263,6 +308,9 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 	}
 	if len(stopSeqs) > 0 {
 		result["stop_sequences"] = stopSeqs
+	}
+	if thinkingConfig != nil {
+		result["thinking"] = json.RawMessage(thinkingConfig)
 	}
 
 	ec.MergeInto(result)

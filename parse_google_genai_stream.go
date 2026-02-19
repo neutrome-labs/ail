@@ -27,6 +27,7 @@ func (p *GoogleGenAIParser) ParseStreamChunk(body []byte) (*Program, error) {
 			Content *struct {
 				Parts []struct {
 					Text         string `json:"text,omitempty"`
+					Thought      *bool  `json:"thought,omitempty"`
 					FunctionCall *struct {
 						Name string          `json:"name"`
 						Args json.RawMessage `json:"args"`
@@ -39,7 +40,11 @@ func (p *GoogleGenAIParser) ParseStreamChunk(body []byte) (*Program, error) {
 			for _, cand := range candidates {
 				if cand.Content != nil {
 					for _, part := range cand.Content.Parts {
-						if part.Text != "" {
+						if part.Thought != nil && *part.Thought {
+							if part.Text != "" {
+								prog.EmitString(STREAM_THINK_DELTA, part.Text)
+							}
+						} else if part.Text != "" {
 							prog.EmitString(STREAM_DELTA, part.Text)
 						}
 						if part.FunctionCall != nil {

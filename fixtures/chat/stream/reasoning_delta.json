@@ -1,0 +1,11 @@
+{
+  "id": "chatcmpl-stream01",
+  "object": "chat.completion.chunk",
+  "model": "deepseek-r1",
+  "choices": [
+    {
+      "index": 0,
+      "delta": {"reasoning_content": "thinking step by step"}
+    }
+  ]
+}

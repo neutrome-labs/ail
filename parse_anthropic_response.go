@@ -73,6 +73,23 @@ func (p *AnthropicParser) ParseResponse(body []byte) (*Program, error) {
 						json.Unmarshal(textRaw, &text)
 					}
 					prog.EmitString(TXT_CHUNK, text)
+				case "thinking":
+					prog.Emit(THINK_START)
+					var thinking string
+					if thinkRaw, ok := blockMap["thinking"]; ok {
+						json.Unmarshal(thinkRaw, &thinking)
+					}
+					if thinking != "" {
+						prog.EmitString(THINK_CHUNK, thinking)
+					}
+					if sigRaw, ok := blockMap["signature"]; ok {
+						var sig string
+						if json.Unmarshal(sigRaw, &sig) == nil && sig != "" {
+							ref := prog.AddBuffer([]byte(sig))
+							prog.EmitRef(THINK_REF, ref)
+						}
+					}
+					prog.Emit(THINK_END)
 				case "tool_use":
 					var id, name string
 					if idRaw, ok := blockMap["id"]; ok {

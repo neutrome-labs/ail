@@ -43,9 +43,10 @@ func (p *ChatCompletionsParser) ParseStreamChunk(body []byte) (*Program, error) 
 			Index        int    `json:"index"`
 			FinishReason string `json:"finish_reason"`
 			Delta        *struct {
-				Role      string          `json:"role,omitempty"`
-				Content   json.RawMessage `json:"content,omitempty"`
-				ToolCalls []struct {
+				Role             string          `json:"role,omitempty"`
+				Content          json.RawMessage `json:"content,omitempty"`
+				ReasoningContent json.RawMessage `json:"reasoning_content,omitempty"`
+				ToolCalls        []struct {
 					Index    int    `json:"index"`
 					ID       string `json:"id,omitempty"`
 					Type     string `json:"type,omitempty"`
@@ -66,6 +67,12 @@ func (p *ChatCompletionsParser) ParseStreamChunk(body []byte) (*Program, error) 
 						var content string
 						if json.Unmarshal(choice.Delta.Content, &content) == nil && content != "" {
 							prog.EmitString(STREAM_DELTA, content)
+						}
+					}
+					if choice.Delta.ReasoningContent != nil {
+						var rc string
+						if json.Unmarshal(choice.Delta.ReasoningContent, &rc) == nil && rc != "" {
+							prog.EmitString(STREAM_THINK_DELTA, rc)
 						}
 					}
 					for _, tc := range choice.Delta.ToolCalls {

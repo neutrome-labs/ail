@@ -19,6 +19,9 @@ func (e *GoogleGenAIEmitter) EmitStreamChunk(prog *Program) ([]byte, error) {
 		case STREAM_DELTA:
 			parts = append(parts, map[string]any{"text": inst.Str})
 
+		case STREAM_THINK_DELTA:
+			parts = append(parts, map[string]any{"thought": true, "text": inst.Str})
+
 		case STREAM_TOOL_DELTA:
 			var td map[string]any
 			if json.Unmarshal(inst.JSON, &td) == nil {

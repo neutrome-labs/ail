@@ -46,6 +46,15 @@ func (p *ResponsesParser) ParseStreamChunk(body []byte) (*Program, error) {
 			prog.EmitString(STREAM_DELTA, delta)
 		}
 
+	case "response.reasoning_summary_text.delta":
+		delta := ""
+		if deltaRaw, ok := raw["delta"]; ok {
+			json.Unmarshal(deltaRaw, &delta)
+		}
+		if delta != "" {
+			prog.EmitString(STREAM_THINK_DELTA, delta)
+		}
+
 	case "response.function_call_arguments.delta":
 		delta := ""
 		if deltaRaw, ok := raw["delta"]; ok {

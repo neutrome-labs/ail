@@ -35,6 +35,12 @@ type ToolResultSpan struct {
 	CallID string // RESULT_START string arg (the call ID)
 }
 
+// ThinkingSpan locates a THINK_START..THINK_END block within a message.
+type ThinkingSpan struct {
+	Start int // index of THINK_START
+	End   int // index of THINK_END
+}
+
 // ─── Traversal ───────────────────────────────────────────────────────────────
 
 // Messages returns all message spans in instruction order.
@@ -136,6 +142,26 @@ func (p *Program) ToolResults() []ToolResultSpan {
 	return spans
 }
 
+// Thinkings returns all thinking block spans in instruction order.
+func (p *Program) Thinkings() []ThinkingSpan {
+	var spans []ThinkingSpan
+	for i := 0; i < len(p.Code); i++ {
+		if p.Code[i].Op != THINK_START {
+			continue
+		}
+		span := ThinkingSpan{Start: i}
+		for j := i + 1; j < len(p.Code); j++ {
+			if p.Code[j].Op == THINK_END {
+				span.End = j
+				spans = append(spans, span)
+				i = j
+				break
+			}
+		}
+	}
+	return spans
+}
+
 // ─── Content extraction ──────────────────────────────────────────────────────
 
 // MessageText returns the concatenated TXT_CHUNK content within a message span.
@@ -147,6 +173,22 @@ func (p *Program) MessageText(span MessageSpan) string {
 		}
 	}
 	return sb.String()
+}
+
+// ThinkingText returns the concatenated THINK_CHUNK content within a thinking span.
+func (p *Program) ThinkingText(span ThinkingSpan) string {
+	var sb strings.Builder
+	for i := span.Start; i <= span.End && i < len(p.Code); i++ {
+		if p.Code[i].Op == THINK_CHUNK {
+			sb.WriteString(p.Code[i].Str)
+		}
+	}
+	return sb.String()
+}
+
+// HasThinking returns true if the program contains any THINK_START opcodes.
+func (p *Program) HasThinking() bool {
+	return p.HasOpcode(THINK_START)
 }
 
 // SystemPrompt returns the concatenated text of all leading system messages,

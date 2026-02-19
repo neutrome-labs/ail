@@ -21,6 +21,11 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 	var textContent string
 	var isMultimodal bool
 	var toolCalls []map[string]any
+	var thinkingConfig json.RawMessage
+
+	// Reasoning content state
+	inThinking := false
+	var reasoningContent string
 
 	// Tool definition state
 	var currentTool map[string]any
@@ -50,6 +55,9 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			result["stream"] = true
 			result["stream_options"] = map[string]any{"include_usage": true}
 
+		case SET_THINK:
+			thinkingConfig = inst.JSON
+
 		// ── Messages ──
 		case MSG_START:
 			ec.Push()
@@ -60,6 +68,8 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			isMultimodal = false
 			toolCalls = nil
 			currentToolCallID = ""
+			reasoningContent = ""
+			inThinking = false
 
 		case ROLE_SYS:
 			currentRole = "system"
@@ -78,6 +88,20 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 				})
 			} else {
 				textContent += inst.Str
+			}
+
+		case THINK_START:
+			inThinking = true
+			reasoningContent = ""
+
+		case THINK_CHUNK:
+			if inThinking {
+				reasoningContent += inst.Str
+			}
+
+		case THINK_REF, THINK_END:
+			if inst.Op == THINK_END {
+				inThinking = false
 			}
 
 		case IMG_REF:
@@ -177,6 +201,10 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 					currentMsg["content"] = textContent
 				}
 
+				if reasoningContent != "" {
+					currentMsg["reasoning_content"] = reasoningContent
+				}
+
 				if len(toolCalls) > 0 {
 					currentMsg["tool_calls"] = toolCalls
 				}
@@ -258,6 +286,16 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 		result["stop"] = stopSeqs[0]
 	} else if len(stopSeqs) > 1 {
 		result["stop"] = stopSeqs
+	}
+
+	// Emit reasoning_effort from thinking config
+	if thinkingConfig != nil {
+		var cfg map[string]any
+		if json.Unmarshal(thinkingConfig, &cfg) == nil {
+			if effort, ok := cfg["effort"]; ok {
+				result["reasoning_effort"] = effort
+			}
+		}
 	}
 
 	ec.MergeInto(result)

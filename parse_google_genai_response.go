@@ -56,8 +56,10 @@ func (p *GoogleGenAIParser) ParseResponse(body []byte) (*Program, error) {
 				if contentRaw, ok := candMap["content"]; ok {
 					var content struct {
 						Parts []struct {
-							Text         string `json:"text,omitempty"`
-							FunctionCall *struct {
+							Text             string `json:"text,omitempty"`
+							Thought          *bool  `json:"thought,omitempty"`
+							ThoughtSignature string `json:"thoughtSignature,omitempty"`
+							FunctionCall     *struct {
 								Name string          `json:"name"`
 								Args json.RawMessage `json:"args"`
 							} `json:"functionCall,omitempty"`
@@ -65,7 +67,17 @@ func (p *GoogleGenAIParser) ParseResponse(body []byte) (*Program, error) {
 					}
 					if json.Unmarshal(contentRaw, &content) == nil {
 						for _, part := range content.Parts {
-							if part.Text != "" {
+							if part.Thought != nil && *part.Thought {
+								prog.Emit(THINK_START)
+								if part.Text != "" {
+									prog.EmitString(THINK_CHUNK, part.Text)
+								}
+								if part.ThoughtSignature != "" {
+									ref := prog.AddBuffer([]byte(part.ThoughtSignature))
+									prog.EmitRef(THINK_REF, ref)
+								}
+								prog.Emit(THINK_END)
+							} else if part.Text != "" {
 								prog.EmitString(TXT_CHUNK, part.Text)
 							}
 							if part.FunctionCall != nil {

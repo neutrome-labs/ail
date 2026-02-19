@@ -39,6 +39,15 @@ func (e *ChatCompletionsEmitter) EmitStreamChunk(prog *Program) ([]byte, error) 
 				})
 			}
 			delta["content"] = inst.Str
+		case STREAM_THINK_DELTA:
+			if delta == nil {
+				delta = make(map[string]any)
+				choices = append(choices, map[string]any{
+					"index": 0,
+					"delta": delta,
+				})
+			}
+			delta["reasoning_content"] = inst.Str
 
 		case STREAM_TOOL_DELTA:
 			if delta == nil {

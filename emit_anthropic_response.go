@@ -15,6 +15,11 @@ func (e *AnthropicEmitter) EmitResponse(prog *Program) ([]byte, error) {
 	ec := NewExtrasCollector()
 	inMessage := false
 
+	// Thinking block state
+	inThinking := false
+	var thinkingText string
+	var thinkingSignature string
+
 	for _, inst := range prog.Code {
 		switch inst.Op {
 		case RESP_ID:
@@ -45,6 +50,41 @@ func (e *AnthropicEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			if inMessage {
 				textContent += inst.Str
 			}
+
+		case THINK_START:
+			inThinking = true
+			thinkingText = ""
+			thinkingSignature = ""
+
+		case THINK_CHUNK:
+			if inThinking {
+				thinkingText += inst.Str
+			}
+
+		case THINK_REF:
+			if inThinking && int(inst.Ref) < len(prog.Buffers) {
+				thinkingSignature = string(prog.Buffers[inst.Ref])
+			}
+
+		case THINK_END:
+			if inThinking && inMessage {
+				if textContent != "" {
+					contentBlocks = append(contentBlocks, map[string]any{
+						"type": "text",
+						"text": textContent,
+					})
+					textContent = ""
+				}
+				block := map[string]any{
+					"type":     "thinking",
+					"thinking": thinkingText,
+				}
+				if thinkingSignature != "" {
+					block["signature"] = thinkingSignature
+				}
+				contentBlocks = append(contentBlocks, block)
+			}
+			inThinking = false
 
 		case CALL_START:
 			ec.Push()

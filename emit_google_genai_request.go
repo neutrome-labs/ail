@@ -17,11 +17,17 @@ func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 	var systemParts []map[string]any
 
 	genConfig := make(map[string]any)
+	var thinkingConfig json.RawMessage
 
 	var currentRole string
 	var parts []any
 	inMessage := false
 	var lastMediaType string
+
+	// Thinking block state
+	inThinking := false
+	var thinkingText string
+	var thinkingSig string
 
 	// Tool definition state
 	var funcDecls []map[string]any
@@ -43,6 +49,8 @@ func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			genConfig["maxOutputTokens"] = inst.Int
 		case SET_STOP:
 			stopSeqs = append(stopSeqs, inst.Str)
+		case SET_THINK:
+			thinkingConfig = inst.JSON
 
 		// Messages
 		case MSG_START:
@@ -59,6 +67,28 @@ func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			currentRole = "model"
 		case ROLE_TOOL:
 			currentRole = "function"
+
+		case THINK_START:
+			inThinking = true
+			thinkingText = ""
+			thinkingSig = ""
+		case THINK_CHUNK:
+			if inThinking {
+				thinkingText += inst.Str
+			}
+		case THINK_REF:
+			if inThinking && int(inst.Ref) < len(prog.Buffers) {
+				thinkingSig = string(prog.Buffers[inst.Ref])
+			}
+		case THINK_END:
+			if inThinking && inMessage {
+				p := map[string]any{"thought": true, "text": thinkingText}
+				if thinkingSig != "" {
+					p["thoughtSignature"] = thinkingSig
+				}
+				parts = append(parts, p)
+			}
+			inThinking = false
 
 		case TXT_CHUNK:
 			if inMessage {
@@ -233,6 +263,9 @@ func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 	}
 	if len(stopSeqs) > 0 {
 		genConfig["stopSequences"] = stopSeqs
+	}
+	if thinkingConfig != nil {
+		genConfig["thinking_config"] = json.RawMessage(thinkingConfig)
 	}
 	if len(genConfig) > 0 {
 		result["generation_config"] = genConfig

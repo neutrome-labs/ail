@@ -51,9 +51,10 @@ func (p *ChatCompletionsParser) ParseResponse(body []byte) (*Program, error) {
 
 				if msgRaw, ok := choiceMap["message"]; ok {
 					var msg struct {
-						Role      string          `json:"role"`
-						Content   json.RawMessage `json:"content"`
-						ToolCalls []struct {
+						Role             string          `json:"role"`
+						Content          json.RawMessage `json:"content"`
+						ReasoningContent string          `json:"reasoning_content,omitempty"`
+						ToolCalls        []struct {
 							ID       string `json:"id"`
 							Type     string `json:"type"`
 							Function *struct {
@@ -66,6 +67,13 @@ func (p *ChatCompletionsParser) ParseResponse(body []byte) (*Program, error) {
 						switch msg.Role {
 						case "assistant":
 							prog.Emit(ROLE_AST)
+						}
+
+						// Reasoning content (before main content)
+						if msg.ReasoningContent != "" {
+							prog.Emit(THINK_START)
+							prog.EmitString(THINK_CHUNK, msg.ReasoningContent)
+							prog.Emit(THINK_END)
 						}
 
 						if msg.Content != nil {

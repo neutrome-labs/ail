@@ -1,0 +1,15 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {"thought": true, "text": "The user wants to know 2+2. This is basic arithmetic."},
+          {"text": "2 + 2 = 4."}
+        ]
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ]
+}

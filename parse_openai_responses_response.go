@@ -67,6 +67,31 @@ func (p *ResponsesParser) ParseResponse(body []byte) (*Program, error) {
 				}
 
 				switch itemType {
+				case "reasoning":
+					// Reasoning output item with summary
+					prog.Emit(THINK_START)
+					if summaryRaw, ok := itemMap["summary"]; ok {
+						var summaries []struct {
+							Type string `json:"type"`
+							Text string `json:"text"`
+						}
+						if json.Unmarshal(summaryRaw, &summaries) == nil {
+							for _, s := range summaries {
+								if s.Text != "" {
+									prog.EmitString(THINK_CHUNK, s.Text)
+								}
+							}
+						}
+						delete(itemMap, "summary")
+					}
+					prog.Emit(THINK_END)
+					// Remaining reasoning item fields as EXT_DATA
+					delete(itemMap, "type")
+					delete(itemMap, "id")
+					for key, val := range itemMap {
+						prog.EmitKeyJSON(EXT_DATA, key, val)
+					}
+
 				case "message":
 					prog.Emit(MSG_START)
 					prog.Emit(ROLE_AST)

@@ -31,7 +31,7 @@ func (p *Program) Disasm() string {
 	for _, inst := range p.Code {
 		// Decrease indent before END opcodes
 		switch inst.Op {
-		case MSG_END, DEF_END, CALL_END, RESULT_END, STREAM_END:
+		case MSG_END, DEF_END, CALL_END, RESULT_END, STREAM_END, THINK_END:
 			indent--
 			if indent < 0 {
 				indent = 0
@@ -73,7 +73,8 @@ func (p *Program) Disasm() string {
 		switch inst.Op {
 		case TXT_CHUNK, DEF_NAME, DEF_DESC, CALL_START, CALL_NAME,
 			RESULT_START, RESULT_DATA, RESP_ID, RESP_MODEL, RESP_DONE,
-			SET_MODEL, SET_STOP, STREAM_DELTA:
+			SET_MODEL, SET_STOP, STREAM_DELTA,
+			THINK_CHUNK, STREAM_THINK_DELTA:
 			writeStr(inst.Str)
 
 		case SET_TEMP, SET_TOPP:
@@ -82,10 +83,10 @@ func (p *Program) Disasm() string {
 		case SET_MAX:
 			sb.WriteString(fmt.Sprintf(" %d", inst.Int))
 
-		case IMG_REF, AUD_REF, TXT_REF:
+		case IMG_REF, AUD_REF, TXT_REF, THINK_REF:
 			sb.WriteString(fmt.Sprintf(" ref:%d", inst.Ref))
 
-		case DEF_SCHEMA, CALL_ARGS, USAGE, STREAM_TOOL_DELTA:
+		case DEF_SCHEMA, CALL_ARGS, USAGE, STREAM_TOOL_DELTA, SET_THINK:
 			writeJSON(inst.JSON)
 
 		case SET_META:
@@ -104,7 +105,7 @@ func (p *Program) Disasm() string {
 
 		// Increase indent after START opcodes
 		switch inst.Op {
-		case MSG_START, DEF_START, CALL_START, RESULT_START, STREAM_START:
+		case MSG_START, DEF_START, CALL_START, RESULT_START, STREAM_START, THINK_START:
 			indent++
 		}
 	}

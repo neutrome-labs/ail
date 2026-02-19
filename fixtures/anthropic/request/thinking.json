@@ -1,0 +1,13 @@
+{
+  "model": "claude-sonnet-4-20250514",
+  "max_tokens": 16000,
+  "thinking": {"type": "enabled", "budget_tokens": 10000},
+  "messages": [
+    {"role": "user", "content": "Explain quantum entanglement."},
+    {"role": "assistant", "content": [
+      {"type": "thinking", "thinking": "Quantum entanglement is a phenomenon where particles become correlated in such a way that the quantum state of one particle cannot be described independently."},
+      {"type": "text", "text": "Quantum entanglement is when two particles become linked so that measuring one instantly affects the other, regardless of distance."}
+    ]},
+    {"role": "user", "content": "Can you elaborate?"}
+  ]
+}

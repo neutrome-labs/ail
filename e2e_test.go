@@ -10,9 +10,9 @@ import (
 	"testing"
 )
 
-// e2eCase maps a subfolder under e2e_tests/ to a style and operation kind.
+// e2eCase maps a subfolder under fixtures/ to a style and operation kind.
 type e2eCase struct {
-	dir   string // relative to e2e_tests/
+	dir   string // relative to fixtures/
 	style Style
 	kind  string // "request", "response", or "stream"
 }
@@ -38,7 +38,7 @@ var e2eCases = []e2eCase{
 }
 
 func TestE2ERoundTrip(t *testing.T) {
-	const root = "e2e_tests"
+	const root = "fixtures"
 
 	for _, tc := range e2eCases {
 		dir := filepath.Join(root, tc.dir)

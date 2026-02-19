@@ -77,23 +77,38 @@ func (p *ResponsesParser) ParseRequest(body []byte) (*Program, error) {
 
 	// Tools
 	if toolsRaw, ok := raw["tools"]; ok {
-		var tools []struct {
-			Type        string          `json:"type"`
-			Name        string          `json:"name,omitempty"`
-			Description string          `json:"description,omitempty"`
-			Parameters  json.RawMessage `json:"parameters,omitempty"`
-		}
-		if json.Unmarshal(toolsRaw, &tools) == nil {
+		var rawTools []json.RawMessage
+		if json.Unmarshal(toolsRaw, &rawTools) == nil && len(rawTools) > 0 {
 			prog.Emit(DEF_START)
-			for _, tool := range tools {
-				if tool.Name != "" {
-					prog.EmitString(DEF_NAME, tool.Name)
+			for _, rt := range rawTools {
+				var toolMap map[string]json.RawMessage
+				if json.Unmarshal(rt, &toolMap) != nil {
+					continue
 				}
-				if tool.Description != "" {
-					prog.EmitString(DEF_DESC, tool.Description)
+
+				if nameRaw, ok := toolMap["name"]; ok {
+					var name string
+					if json.Unmarshal(nameRaw, &name) == nil && name != "" {
+						prog.EmitString(DEF_NAME, name)
+					}
+					delete(toolMap, "name")
 				}
-				if len(tool.Parameters) > 0 {
-					prog.EmitJSON(DEF_SCHEMA, tool.Parameters)
+				if descRaw, ok := toolMap["description"]; ok {
+					var desc string
+					if json.Unmarshal(descRaw, &desc) == nil && desc != "" {
+						prog.EmitString(DEF_DESC, desc)
+					}
+					delete(toolMap, "description")
+				}
+				if paramsRaw, ok := toolMap["parameters"]; ok {
+					prog.EmitJSON(DEF_SCHEMA, paramsRaw)
+					delete(toolMap, "parameters")
+				}
+				delete(toolMap, "type") // always "function", reconstructed by emitter
+
+				// Remaining tool-level fields as EXT_DATA (e.g., strict)
+				for key, val := range toolMap {
+					prog.EmitKeyJSON(EXT_DATA, key, val)
 				}
 			}
 			prog.Emit(DEF_END)
@@ -112,27 +127,44 @@ func (p *ResponsesParser) ParseRequest(body []byte) (*Program, error) {
 			prog.Emit(MSG_END)
 		} else {
 			// Array of message objects
-			var inputMsgs []struct {
-				Role    string          `json:"role"`
-				Content json.RawMessage `json:"content"`
-			}
-			if json.Unmarshal(inputRaw, &inputMsgs) == nil {
-				for _, msg := range inputMsgs {
-					prog.Emit(MSG_START)
-					switch msg.Role {
-					case "system", "developer":
-						prog.Emit(ROLE_SYS)
-					case "user":
-						prog.Emit(ROLE_USR)
-					case "assistant":
-						prog.Emit(ROLE_AST)
+			var rawMsgs []json.RawMessage
+			if json.Unmarshal(inputRaw, &rawMsgs) == nil {
+				for _, rm := range rawMsgs {
+					var msgMap map[string]json.RawMessage
+					if json.Unmarshal(rm, &msgMap) != nil {
+						continue
 					}
-					if msg.Content != nil {
+
+					prog.Emit(MSG_START)
+
+					if roleRaw, ok := msgMap["role"]; ok {
+						var role string
+						if json.Unmarshal(roleRaw, &role) == nil {
+							switch role {
+							case "system", "developer":
+								prog.Emit(ROLE_SYS)
+							case "user":
+								prog.Emit(ROLE_USR)
+							case "assistant":
+								prog.Emit(ROLE_AST)
+							}
+						}
+						delete(msgMap, "role")
+					}
+
+					if contentRaw, ok := msgMap["content"]; ok {
 						var contentStr string
-						if json.Unmarshal(msg.Content, &contentStr) == nil {
+						if json.Unmarshal(contentRaw, &contentStr) == nil {
 							prog.EmitString(TXT_CHUNK, contentStr)
 						}
+						delete(msgMap, "content")
 					}
+
+					// Remaining per-message fields as EXT_DATA
+					for key, val := range msgMap {
+						prog.EmitKeyJSON(EXT_DATA, key, val)
+					}
+
 					prog.Emit(MSG_END)
 				}
 			}

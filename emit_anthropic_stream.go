@@ -89,6 +89,11 @@ func (e *AnthropicEmitter) EmitStreamChunk(prog *Program) ([]byte, error) {
 
 		case STREAM_END:
 			return json.Marshal(map[string]any{"type": "message_stop"})
+
+		case EXT_DATA:
+			// Stream events are typed — top-level EXT_DATA is merged
+			// into the next event if any, but for simplicity we skip
+			// since stream chunks are small single-events.
 		}
 	}
 

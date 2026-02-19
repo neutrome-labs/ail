@@ -11,6 +11,7 @@ type ChatCompletionsEmitter struct{}
 
 func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 	result := make(map[string]any)
+	ec := NewExtrasCollector()
 	var messages []map[string]any
 	var tools []map[string]any
 
@@ -51,6 +52,7 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 
 		// ── Messages ──
 		case MSG_START:
+			ec.Push()
 			currentMsg = make(map[string]any)
 			currentRole = ""
 			textContent = ""
@@ -118,6 +120,7 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			})
 
 		case CALL_START:
+			ec.Push()
 			tc := map[string]any{
 				"id":   inst.Str,
 				"type": "function",
@@ -147,7 +150,10 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			}
 
 		case CALL_END:
-			// tool call already added to toolCalls
+			if len(toolCalls) > 0 {
+				ec.MergeInto(toolCalls[len(toolCalls)-1])
+			}
+			ec.Pop()
 
 		case RESULT_START:
 			currentToolCallID = inst.Str
@@ -175,18 +181,23 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 					currentMsg["tool_calls"] = toolCalls
 				}
 
+				ec.MergeInto(currentMsg)
 				messages = append(messages, currentMsg)
 				currentMsg = nil
 			}
+			ec.Pop()
 
 		// ── Tool Definitions ──
 		case DEF_START:
+			ec.Push()
 			inToolDefs = true
 			currentTool = nil
 
 		case DEF_NAME:
 			if inToolDefs {
 				if currentTool != nil {
+					fn := currentTool["function"].(map[string]any)
+					ec.MergeInto(fn)
 					tools = append(tools, currentTool)
 				}
 				currentTool = map[string]any{
@@ -209,14 +220,21 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 
 		case DEF_END:
 			if inToolDefs && currentTool != nil {
+				fn := currentTool["function"].(map[string]any)
+				ec.MergeInto(fn)
 				tools = append(tools, currentTool)
 				currentTool = nil
 			}
+			ec.Pop()
 			inToolDefs = false
 
 		// ── Extensions ──
 		case SET_META:
-			if inst.Key != "media_type" {
+			if inst.Key == "media_type" {
+				// consumed by IMG_REF / AUD_REF, not collected
+			} else if ec.Depth() > 0 {
+				ec.AddString(inst.Key, inst.Str)
+			} else {
 				meta, _ := result["metadata"].(map[string]any)
 				if meta == nil {
 					meta = make(map[string]any)
@@ -226,7 +244,7 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			}
 
 		case EXT_DATA:
-			result[inst.Key] = json.RawMessage(inst.JSON)
+			ec.AddJSON(inst.Key, inst.JSON)
 		}
 	}
 
@@ -242,5 +260,6 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 		result["stop"] = stopSeqs
 	}
 
+	ec.MergeInto(result)
 	return json.Marshal(result)
 }

@@ -53,23 +53,48 @@ func (p *AnthropicParser) ParseResponse(body []byte) (*Program, error) {
 	prog.Emit(ROLE_AST)
 
 	if contentRaw, ok := raw["content"]; ok {
-		var blocks []struct {
-			Type  string          `json:"type"`
-			Text  string          `json:"text,omitempty"`
-			ID    string          `json:"id,omitempty"`
-			Name  string          `json:"name,omitempty"`
-			Input json.RawMessage `json:"input,omitempty"`
-		}
-		if json.Unmarshal(contentRaw, &blocks) == nil {
-			for _, block := range blocks {
-				switch block.Type {
+		var rawBlocks []json.RawMessage
+		if json.Unmarshal(contentRaw, &rawBlocks) == nil {
+			for _, rb := range rawBlocks {
+				var blockMap map[string]json.RawMessage
+				if json.Unmarshal(rb, &blockMap) != nil {
+					continue
+				}
+
+				var blockType string
+				if typeRaw, ok := blockMap["type"]; ok {
+					json.Unmarshal(typeRaw, &blockType)
+				}
+
+				switch blockType {
 				case "text":
-					prog.EmitString(TXT_CHUNK, block.Text)
+					var text string
+					if textRaw, ok := blockMap["text"]; ok {
+						json.Unmarshal(textRaw, &text)
+					}
+					prog.EmitString(TXT_CHUNK, text)
 				case "tool_use":
-					prog.EmitString(CALL_START, block.ID)
-					prog.EmitString(CALL_NAME, block.Name)
-					if len(block.Input) > 0 {
-						prog.EmitJSON(CALL_ARGS, block.Input)
+					var id, name string
+					if idRaw, ok := blockMap["id"]; ok {
+						json.Unmarshal(idRaw, &id)
+						delete(blockMap, "id")
+					}
+					if nameRaw, ok := blockMap["name"]; ok {
+						json.Unmarshal(nameRaw, &name)
+						delete(blockMap, "name")
+					}
+					prog.EmitString(CALL_START, id)
+					prog.EmitString(CALL_NAME, name)
+					if inputRaw, ok := blockMap["input"]; ok {
+						if len(inputRaw) > 0 {
+							prog.EmitJSON(CALL_ARGS, inputRaw)
+						}
+						delete(blockMap, "input")
+					}
+					// Remaining block-level fields as EXT_DATA
+					delete(blockMap, "type")
+					for key, val := range blockMap {
+						prog.EmitKeyJSON(EXT_DATA, key, val)
 					}
 					prog.Emit(CALL_END)
 				}

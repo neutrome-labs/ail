@@ -88,20 +88,37 @@ func (p *AnthropicParser) ParseRequest(body []byte) (*Program, error) {
 
 	// Tools
 	if toolsRaw, ok := raw["tools"]; ok {
-		var tools []struct {
-			Name        string          `json:"name"`
-			Description string          `json:"description,omitempty"`
-			InputSchema json.RawMessage `json:"input_schema,omitempty"`
-		}
-		if json.Unmarshal(toolsRaw, &tools) == nil {
+		var rawTools []json.RawMessage
+		if json.Unmarshal(toolsRaw, &rawTools) == nil && len(rawTools) > 0 {
 			prog.Emit(DEF_START)
-			for _, tool := range tools {
-				prog.EmitString(DEF_NAME, tool.Name)
-				if tool.Description != "" {
-					prog.EmitString(DEF_DESC, tool.Description)
+			for _, rt := range rawTools {
+				var toolMap map[string]json.RawMessage
+				if json.Unmarshal(rt, &toolMap) != nil {
+					continue
 				}
-				if len(tool.InputSchema) > 0 {
-					prog.EmitJSON(DEF_SCHEMA, tool.InputSchema)
+
+				if nameRaw, ok := toolMap["name"]; ok {
+					var name string
+					if json.Unmarshal(nameRaw, &name) == nil {
+						prog.EmitString(DEF_NAME, name)
+					}
+					delete(toolMap, "name")
+				}
+				if descRaw, ok := toolMap["description"]; ok {
+					var desc string
+					if json.Unmarshal(descRaw, &desc) == nil && desc != "" {
+						prog.EmitString(DEF_DESC, desc)
+					}
+					delete(toolMap, "description")
+				}
+				if schemaRaw, ok := toolMap["input_schema"]; ok {
+					prog.EmitJSON(DEF_SCHEMA, schemaRaw)
+					delete(toolMap, "input_schema")
+				}
+
+				// Remaining fields as EXT_DATA (e.g., cache_control)
+				for key, val := range toolMap {
+					prog.EmitKeyJSON(EXT_DATA, key, val)
 				}
 			}
 			prog.Emit(DEF_END)
@@ -111,74 +128,133 @@ func (p *AnthropicParser) ParseRequest(body []byte) (*Program, error) {
 
 	// Messages
 	if msgsRaw, ok := raw["messages"]; ok {
-		var messages []struct {
-			Role    string          `json:"role"`
-			Content json.RawMessage `json:"content"`
-		}
-		if json.Unmarshal(msgsRaw, &messages) == nil {
-			for _, msg := range messages {
+		var rawMsgs []json.RawMessage
+		if json.Unmarshal(msgsRaw, &rawMsgs) == nil {
+			for _, rm := range rawMsgs {
+				var msgMap map[string]json.RawMessage
+				if json.Unmarshal(rm, &msgMap) != nil {
+					continue
+				}
+
 				prog.Emit(MSG_START)
 
-				switch msg.Role {
-				case "user":
-					prog.Emit(ROLE_USR)
-				case "assistant":
-					prog.Emit(ROLE_AST)
+				if roleRaw, ok := msgMap["role"]; ok {
+					var role string
+					if json.Unmarshal(roleRaw, &role) == nil {
+						switch role {
+						case "user":
+							prog.Emit(ROLE_USR)
+						case "assistant":
+							prog.Emit(ROLE_AST)
+						}
+					}
+					delete(msgMap, "role")
 				}
 
 				// Content can be string or array of content blocks
-				if msg.Content != nil {
+				if contentRaw, ok := msgMap["content"]; ok {
 					var contentStr string
-					if json.Unmarshal(msg.Content, &contentStr) == nil {
+					if json.Unmarshal(contentRaw, &contentStr) == nil {
 						prog.EmitString(TXT_CHUNK, contentStr)
 					} else {
-						var blocks []struct {
-							Type      string          `json:"type"`
-							Text      string          `json:"text,omitempty"`
-							ID        string          `json:"id,omitempty"`
-							Name      string          `json:"name,omitempty"`
-							Input     json.RawMessage `json:"input,omitempty"`
-							ToolUseID string          `json:"tool_use_id,omitempty"`
-							Content   json.RawMessage `json:"content,omitempty"`
-							Source    *struct {
-								Type      string `json:"type"`
-								MediaType string `json:"media_type"`
-								Data      string `json:"data"`
-							} `json:"source,omitempty"`
-						}
-						if json.Unmarshal(msg.Content, &blocks) == nil {
-							for _, block := range blocks {
-								switch block.Type {
+						var rawBlocks []json.RawMessage
+						if json.Unmarshal(contentRaw, &rawBlocks) == nil {
+							for _, rb := range rawBlocks {
+								var blockMap map[string]json.RawMessage
+								if json.Unmarshal(rb, &blockMap) != nil {
+									continue
+								}
+
+								var blockType string
+								if typeRaw, ok := blockMap["type"]; ok {
+									json.Unmarshal(typeRaw, &blockType)
+								}
+
+								switch blockType {
 								case "text":
-									prog.EmitString(TXT_CHUNK, block.Text)
-								case "image":
-									if block.Source != nil {
-										ref := prog.AddBuffer([]byte(block.Source.Data))
-										if block.Source.MediaType != "" {
-											prog.EmitKeyVal(SET_META, "media_type", block.Source.MediaType)
-										}
-										prog.EmitRef(IMG_REF, ref)
+									var text string
+									if textRaw, ok := blockMap["text"]; ok {
+										json.Unmarshal(textRaw, &text)
 									}
+									prog.EmitString(TXT_CHUNK, text)
+								case "image":
+									if sourceRaw, ok := blockMap["source"]; ok {
+										var source struct {
+											Type      string `json:"type"`
+											MediaType string `json:"media_type"`
+											Data      string `json:"data"`
+										}
+										if json.Unmarshal(sourceRaw, &source) == nil {
+											ref := prog.AddBuffer([]byte(source.Data))
+											if source.MediaType != "" {
+												prog.EmitKeyVal(SET_META, "media_type", source.MediaType)
+											}
+											prog.EmitRef(IMG_REF, ref)
+										}
+									}
+									delete(blockMap, "source")
 								case "tool_use":
-									prog.EmitString(CALL_START, block.ID)
-									prog.EmitString(CALL_NAME, block.Name)
-									if len(block.Input) > 0 {
-										prog.EmitJSON(CALL_ARGS, block.Input)
+									var id, name string
+									if idRaw, ok := blockMap["id"]; ok {
+										json.Unmarshal(idRaw, &id)
+										delete(blockMap, "id")
+									}
+									if nameRaw, ok := blockMap["name"]; ok {
+										json.Unmarshal(nameRaw, &name)
+										delete(blockMap, "name")
+									}
+									prog.EmitString(CALL_START, id)
+									prog.EmitString(CALL_NAME, name)
+									if inputRaw, ok := blockMap["input"]; ok {
+										if len(inputRaw) > 0 {
+											prog.EmitJSON(CALL_ARGS, inputRaw)
+										}
+										delete(blockMap, "input")
+									}
+									// Remaining block-level fields as EXT_DATA
+									delete(blockMap, "type")
+									for key, val := range blockMap {
+										prog.EmitKeyJSON(EXT_DATA, key, val)
 									}
 									prog.Emit(CALL_END)
+									continue // skip common tail
 								case "tool_result":
-									prog.EmitString(RESULT_START, block.ToolUseID)
-									if block.Content != nil {
+									var toolUseID string
+									if tuiRaw, ok := blockMap["tool_use_id"]; ok {
+										json.Unmarshal(tuiRaw, &toolUseID)
+										delete(blockMap, "tool_use_id")
+									}
+									prog.EmitString(RESULT_START, toolUseID)
+									if contentInner, ok := blockMap["content"]; ok {
 										var resultStr string
-										if json.Unmarshal(block.Content, &resultStr) == nil {
+										if json.Unmarshal(contentInner, &resultStr) == nil {
 											prog.EmitString(RESULT_DATA, resultStr)
 										}
+										delete(blockMap, "content")
+									}
+									// Remaining block-level fields as EXT_DATA
+									delete(blockMap, "type")
+									for key, val := range blockMap {
+										prog.EmitKeyJSON(EXT_DATA, key, val)
 									}
 									prog.Emit(RESULT_END)
+									continue // skip common tail
+								}
+								// Common tail: passthrough remaining block-level fields
+								delete(blockMap, "type")
+								delete(blockMap, "text")
+								for key, val := range blockMap {
+									prog.EmitKeyJSON(EXT_DATA, key, val)
 								}
 							}
 						}
 					}
+					delete(msgMap, "content")
+				}
+
+				// Remaining per-message fields as EXT_DATA
+				for key, val := range msgMap {
+					prog.EmitKeyJSON(EXT_DATA, key, val)
 				}
 
 				prog.Emit(MSG_END)

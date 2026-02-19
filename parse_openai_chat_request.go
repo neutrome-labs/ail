@@ -88,25 +88,52 @@ func (p *ChatCompletionsParser) ParseRequest(body []byte) (*Program, error) {
 
 	// Tool definitions
 	if toolsRaw, ok := raw["tools"]; ok {
-		var tools []struct {
-			Type     string `json:"type"`
-			Function *struct {
-				Name        string          `json:"name"`
-				Description string          `json:"description,omitempty"`
-				Parameters  json.RawMessage `json:"parameters,omitempty"`
-			} `json:"function,omitempty"`
-		}
-		if err := json.Unmarshal(toolsRaw, &tools); err == nil {
+		var rawTools []json.RawMessage
+		if json.Unmarshal(toolsRaw, &rawTools) == nil && len(rawTools) > 0 {
 			prog.Emit(DEF_START)
-			for _, tool := range tools {
-				if tool.Function != nil {
-					prog.EmitString(DEF_NAME, tool.Function.Name)
-					if tool.Function.Description != "" {
-						prog.EmitString(DEF_DESC, tool.Function.Description)
+			for _, rt := range rawTools {
+				var toolMap map[string]json.RawMessage
+				if json.Unmarshal(rt, &toolMap) != nil {
+					continue
+				}
+				funcRaw, ok := toolMap["function"]
+				if !ok {
+					continue
+				}
+				delete(toolMap, "function")
+				delete(toolMap, "type") // always "function", reconstructed by emitter
+
+				var funcMap map[string]json.RawMessage
+				if json.Unmarshal(funcRaw, &funcMap) != nil {
+					continue
+				}
+
+				if nameRaw, ok := funcMap["name"]; ok {
+					var name string
+					if json.Unmarshal(nameRaw, &name) == nil {
+						prog.EmitString(DEF_NAME, name)
 					}
-					if len(tool.Function.Parameters) > 0 {
-						prog.EmitJSON(DEF_SCHEMA, tool.Function.Parameters)
+					delete(funcMap, "name")
+				}
+				if descRaw, ok := funcMap["description"]; ok {
+					var desc string
+					if json.Unmarshal(descRaw, &desc) == nil && desc != "" {
+						prog.EmitString(DEF_DESC, desc)
 					}
+					delete(funcMap, "description")
+				}
+				if paramsRaw, ok := funcMap["parameters"]; ok {
+					prog.EmitJSON(DEF_SCHEMA, paramsRaw)
+					delete(funcMap, "parameters")
+				}
+
+				// Remaining function-level fields as EXT_DATA (e.g., strict)
+				for key, val := range funcMap {
+					prog.EmitKeyJSON(EXT_DATA, key, val)
+				}
+				// Remaining outer tool-level fields as EXT_DATA
+				for key, val := range toolMap {
+					prog.EmitKeyJSON(EXT_DATA, key, val)
 				}
 			}
 			prog.Emit(DEF_END)
@@ -116,29 +143,26 @@ func (p *ChatCompletionsParser) ParseRequest(body []byte) (*Program, error) {
 
 	// Messages
 	if msgsRaw, ok := raw["messages"]; ok {
-		var messages []struct {
-			Role       string          `json:"role"`
-			Content    json.RawMessage `json:"content"`
-			Name       string          `json:"name,omitempty"`
-			ToolCallID string          `json:"tool_call_id,omitempty"`
-			ToolCalls  []struct {
-				ID       string `json:"id"`
-				Type     string `json:"type"`
-				Function *struct {
-					Name      string `json:"name"`
-					Arguments string `json:"arguments"`
-				} `json:"function"`
-			} `json:"tool_calls,omitempty"`
-		}
-		if err := json.Unmarshal(msgsRaw, &messages); err != nil {
+		var rawMsgs []json.RawMessage
+		if err := json.Unmarshal(msgsRaw, &rawMsgs); err != nil {
 			return nil, fmt.Errorf("ail: parse messages: %w", err)
 		}
 
-		for _, msg := range messages {
+		for _, rm := range rawMsgs {
+			var msgMap map[string]json.RawMessage
+			if json.Unmarshal(rm, &msgMap) != nil {
+				continue
+			}
+
 			prog.Emit(MSG_START)
 
 			// Role
-			switch msg.Role {
+			var role string
+			if roleRaw, ok := msgMap["role"]; ok {
+				json.Unmarshal(roleRaw, &role)
+				delete(msgMap, "role")
+			}
+			switch role {
 			case "system", "developer":
 				prog.Emit(ROLE_SYS)
 			case "user":
@@ -148,75 +172,110 @@ func (p *ChatCompletionsParser) ParseRequest(body []byte) (*Program, error) {
 			case "tool":
 				prog.Emit(ROLE_TOOL)
 				// Tool result
-				if msg.ToolCallID != "" {
-					prog.EmitString(RESULT_START, msg.ToolCallID)
+				if tcidRaw, ok := msgMap["tool_call_id"]; ok {
+					var tcid string
+					if json.Unmarshal(tcidRaw, &tcid) == nil && tcid != "" {
+						prog.EmitString(RESULT_START, tcid)
+					}
+					delete(msgMap, "tool_call_id")
 				}
 			}
 
 			// Content: can be string or array of content parts
-			if msg.Content != nil {
+			if contentRaw, ok := msgMap["content"]; ok {
 				var contentStr string
-				if err := json.Unmarshal(msg.Content, &contentStr); err == nil {
+				if json.Unmarshal(contentRaw, &contentStr) == nil {
 					// Simple string content
-					if msg.Role == "tool" {
+					if role == "tool" {
 						prog.EmitString(RESULT_DATA, contentStr)
 					} else {
 						prog.EmitString(TXT_CHUNK, contentStr)
 					}
 				} else {
 					// Array of content parts
-					var parts []struct {
-						Type     string `json:"type"`
-						Text     string `json:"text,omitempty"`
-						ImageURL *struct {
-							URL    string `json:"url"`
-							Detail string `json:"detail,omitempty"`
-						} `json:"image_url,omitempty"`
-						InputAudio *struct {
-							Data   string `json:"data"`
-							Format string `json:"format"`
-						} `json:"input_audio,omitempty"`
-					}
-					if err2 := json.Unmarshal(msg.Content, &parts); err2 == nil {
-						for _, part := range parts {
-							switch part.Type {
+					var rawParts []json.RawMessage
+					if json.Unmarshal(contentRaw, &rawParts) == nil {
+						for _, rp := range rawParts {
+							var partMap map[string]json.RawMessage
+							if json.Unmarshal(rp, &partMap) != nil {
+								continue
+							}
+							var partType string
+							if ptRaw, ok := partMap["type"]; ok {
+								json.Unmarshal(ptRaw, &partType)
+							}
+							switch partType {
 							case "text":
-								prog.EmitString(TXT_CHUNK, part.Text)
+								var text string
+								if textRaw, ok := partMap["text"]; ok {
+									json.Unmarshal(textRaw, &text)
+								}
+								prog.EmitString(TXT_CHUNK, text)
 							case "image_url":
-								if part.ImageURL != nil {
-									// Store URL as buffer, emit reference
-									ref := prog.AddBuffer([]byte(part.ImageURL.URL))
-									prog.EmitRef(IMG_REF, ref)
+								if iuRaw, ok := partMap["image_url"]; ok {
+									var iu struct {
+										URL    string `json:"url"`
+										Detail string `json:"detail,omitempty"`
+									}
+									if json.Unmarshal(iuRaw, &iu) == nil {
+										ref := prog.AddBuffer([]byte(iu.URL))
+										prog.EmitRef(IMG_REF, ref)
+									}
 								}
 							case "input_audio":
-								if part.InputAudio != nil {
-									ref := prog.AddBuffer([]byte(part.InputAudio.Data))
-									if part.InputAudio.Format != "" {
-										prog.EmitKeyVal(SET_META, "media_type", "audio/"+part.InputAudio.Format)
+								if iaRaw, ok := partMap["input_audio"]; ok {
+									var ia struct {
+										Data   string `json:"data"`
+										Format string `json:"format"`
 									}
-									prog.EmitRef(AUD_REF, ref)
+									if json.Unmarshal(iaRaw, &ia) == nil {
+										ref := prog.AddBuffer([]byte(ia.Data))
+										if ia.Format != "" {
+											prog.EmitKeyVal(SET_META, "media_type", "audio/"+ia.Format)
+										}
+										prog.EmitRef(AUD_REF, ref)
+									}
 								}
 							}
 						}
 					}
 				}
+				delete(msgMap, "content")
 			}
 
 			// Tool calls in assistant messages
-			for _, tc := range msg.ToolCalls {
-				prog.EmitString(CALL_START, tc.ID)
-				if tc.Function != nil {
-					prog.EmitString(CALL_NAME, tc.Function.Name)
-					if tc.Function.Arguments != "" {
-						prog.EmitJSON(CALL_ARGS, json.RawMessage(tc.Function.Arguments))
+			if tcRaw, ok := msgMap["tool_calls"]; ok {
+				var toolCalls []struct {
+					ID       string `json:"id"`
+					Type     string `json:"type"`
+					Function *struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					} `json:"function"`
+				}
+				if json.Unmarshal(tcRaw, &toolCalls) == nil {
+					for _, tc := range toolCalls {
+						prog.EmitString(CALL_START, tc.ID)
+						if tc.Function != nil {
+							prog.EmitString(CALL_NAME, tc.Function.Name)
+							if tc.Function.Arguments != "" {
+								prog.EmitJSON(CALL_ARGS, json.RawMessage(tc.Function.Arguments))
+							}
+						}
+						prog.Emit(CALL_END)
 					}
 				}
-				prog.Emit(CALL_END)
+				delete(msgMap, "tool_calls")
 			}
 
 			// Close tool result
-			if msg.Role == "tool" && msg.ToolCallID != "" {
+			if role == "tool" {
 				prog.Emit(RESULT_END)
+			}
+
+			// Remaining per-message fields as EXT_DATA (e.g., name, refusal)
+			for key, val := range msgMap {
+				prog.EmitKeyJSON(EXT_DATA, key, val)
 			}
 
 			prog.Emit(MSG_END)

@@ -11,6 +11,7 @@ func (e *GoogleGenAIEmitter) EmitResponse(prog *Program) ([]byte, error) {
 	var parts []any
 	inMessage := false
 	var finishReason string
+	ec := NewExtrasCollector()
 
 	for _, inst := range prog.Code {
 		switch inst.Op {
@@ -32,6 +33,7 @@ func (e *GoogleGenAIEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			}
 
 		case MSG_START:
+			ec.Push()
 			inMessage = true
 			parts = nil
 			finishReason = ""
@@ -42,6 +44,7 @@ func (e *GoogleGenAIEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			}
 
 		case CALL_START:
+			ec.Push()
 			if inMessage {
 				parts = append(parts, map[string]any{
 					"functionCall": map[string]any{},
@@ -64,6 +67,15 @@ func (e *GoogleGenAIEmitter) EmitResponse(prog *Program) ([]byte, error) {
 				}
 			}
 
+		case CALL_END:
+			if len(parts) > 0 {
+				last := parts[len(parts)-1].(map[string]any)
+				if fc, ok := last["functionCall"].(map[string]any); ok {
+					ec.MergeInto(fc)
+				}
+			}
+			ec.Pop()
+
 		case RESP_DONE:
 			switch inst.Str {
 			case "stop":
@@ -75,7 +87,12 @@ func (e *GoogleGenAIEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			}
 
 		case EXT_DATA:
-			result[inst.Key] = json.RawMessage(inst.JSON)
+			ec.AddJSON(inst.Key, inst.JSON)
+
+		case SET_META:
+			if inst.Key != "media_type" {
+				ec.AddString(inst.Key, inst.Str)
+			}
 
 		case MSG_END:
 			if inMessage {
@@ -89,9 +106,11 @@ func (e *GoogleGenAIEmitter) EmitResponse(prog *Program) ([]byte, error) {
 				if finishReason != "" {
 					cand["finishReason"] = finishReason
 				}
+				ec.MergeInto(cand)
 				candidates = append(candidates, cand)
 				inMessage = false
 			}
+			ec.Pop()
 		}
 	}
 
@@ -99,5 +118,6 @@ func (e *GoogleGenAIEmitter) EmitResponse(prog *Program) ([]byte, error) {
 		result["candidates"] = candidates
 	}
 
+	ec.MergeInto(result)
 	return json.Marshal(result)
 }

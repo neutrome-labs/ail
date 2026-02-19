@@ -11,6 +11,7 @@ type AnthropicEmitter struct{}
 
 func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 	result := make(map[string]any)
+	ec := NewExtrasCollector()
 	var messages []map[string]any
 	var tools []map[string]any
 	var systemText string
@@ -48,6 +49,7 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 
 		// Messages
 		case MSG_START:
+			ec.Push()
 			inMessage = true
 			currentRole = ""
 			contentBlocks = nil
@@ -102,6 +104,7 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 
 		case CALL_START:
 			if inMessage {
+				ec.Push()
 				// Flush text
 				if simpleText != "" {
 					contentBlocks = append(contentBlocks, map[string]any{
@@ -131,6 +134,15 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 					last["input"] = json.RawMessage(inst.JSON)
 				}
 			}
+
+		case CALL_END:
+			if len(contentBlocks) > 0 {
+				last := contentBlocks[len(contentBlocks)-1].(map[string]any)
+				if last["type"] == "tool_use" {
+					ec.MergeInto(last)
+				}
+			}
+			ec.Pop()
 
 		case RESULT_START:
 			currentToolCallID = inst.Str
@@ -179,19 +191,23 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 					} else if simpleText != "" {
 						msg["content"] = simpleText
 					}
+					ec.MergeInto(msg)
 					messages = append(messages, msg)
 				}
 				inMessage = false
 			}
+			ec.Pop()
 
 		// Tool definitions
 		case DEF_START:
+			ec.Push()
 			inToolDefs = true
 			currentTool = nil
 
 		case DEF_NAME:
 			if inToolDefs {
 				if currentTool != nil {
+					ec.MergeInto(currentTool)
 					tools = append(tools, currentTool)
 				}
 				currentTool = map[string]any{"name": inst.Str}
@@ -209,15 +225,19 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 
 		case DEF_END:
 			if inToolDefs && currentTool != nil {
+				ec.MergeInto(currentTool)
 				tools = append(tools, currentTool)
 				currentTool = nil
 			}
+			ec.Pop()
 			inToolDefs = false
 
 		// Extensions
 		case SET_META:
 			if inst.Key == "media_type" {
 				lastMediaType = inst.Str
+			} else if ec.Depth() > 0 {
+				ec.AddString(inst.Key, inst.Str)
 			} else {
 				meta, _ := result["metadata"].(map[string]any)
 				if meta == nil {
@@ -228,7 +248,7 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			}
 
 		case EXT_DATA:
-			result[inst.Key] = json.RawMessage(inst.JSON)
+			ec.AddJSON(inst.Key, inst.JSON)
 		}
 	}
 
@@ -245,5 +265,6 @@ func (e *AnthropicEmitter) EmitRequest(prog *Program) ([]byte, error) {
 		result["stop_sequences"] = stopSeqs
 	}
 
+	ec.MergeInto(result)
 	return json.Marshal(result)
 }

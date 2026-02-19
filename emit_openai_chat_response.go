@@ -14,6 +14,7 @@ func (e *ChatCompletionsEmitter) EmitResponse(prog *Program) ([]byte, error) {
 	var currentMessage map[string]any
 	var textContent string
 	var toolCalls []map[string]any
+	ec := NewExtrasCollector()
 	inMessage := false
 
 	for _, inst := range prog.Code {
@@ -26,6 +27,7 @@ func (e *ChatCompletionsEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			result["usage"] = json.RawMessage(inst.JSON)
 
 		case MSG_START:
+			ec.Push()
 			inMessage = true
 			currentChoice = map[string]any{"index": len(choices)}
 			currentMessage = make(map[string]any)
@@ -43,6 +45,7 @@ func (e *ChatCompletionsEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			}
 
 		case CALL_START:
+			ec.Push()
 			tc := map[string]any{
 				"id":   inst.Str,
 				"type": "function",
@@ -72,7 +75,10 @@ func (e *ChatCompletionsEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			}
 
 		case CALL_END:
-			// already tracked
+			if len(toolCalls) > 0 {
+				ec.MergeInto(toolCalls[len(toolCalls)-1])
+			}
+			ec.Pop()
 
 		case RESP_DONE:
 			if currentChoice != nil {
@@ -80,7 +86,12 @@ func (e *ChatCompletionsEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			}
 
 		case EXT_DATA:
-			result[inst.Key] = json.RawMessage(inst.JSON)
+			ec.AddJSON(inst.Key, inst.JSON)
+
+		case SET_META:
+			if inst.Key != "media_type" {
+				ec.AddString(inst.Key, inst.Str)
+			}
 
 		case MSG_END:
 			if inMessage && currentChoice != nil {
@@ -91,9 +102,11 @@ func (e *ChatCompletionsEmitter) EmitResponse(prog *Program) ([]byte, error) {
 					currentMessage["tool_calls"] = toolCalls
 				}
 				currentChoice["message"] = currentMessage
+				ec.MergeInto(currentChoice)
 				choices = append(choices, currentChoice)
 				inMessage = false
 			}
+			ec.Pop()
 		}
 	}
 
@@ -101,5 +114,6 @@ func (e *ChatCompletionsEmitter) EmitResponse(prog *Program) ([]byte, error) {
 		result["choices"] = choices
 	}
 
+	ec.MergeInto(result)
 	return json.Marshal(result)
 }

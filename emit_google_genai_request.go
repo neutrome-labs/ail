@@ -11,6 +11,7 @@ type GoogleGenAIEmitter struct{}
 
 func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 	result := make(map[string]any)
+	ec := NewExtrasCollector()
 	var contents []map[string]any
 	var tools []map[string]any
 	var systemParts []map[string]any
@@ -45,6 +46,7 @@ func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 
 		// Messages
 		case MSG_START:
+			ec.Push()
 			inMessage = true
 			currentRole = ""
 			parts = nil
@@ -102,6 +104,7 @@ func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 			}
 
 		case CALL_START:
+			ec.Push()
 			// Function call part (to be built up)
 			parts = append(parts, map[string]any{
 				"functionCall": map[string]any{},
@@ -122,6 +125,15 @@ func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 					fc["args"] = json.RawMessage(inst.JSON)
 				}
 			}
+
+		case CALL_END:
+			if len(parts) > 0 {
+				last := parts[len(parts)-1].(map[string]any)
+				if fc, ok := last["functionCall"].(map[string]any); ok {
+					ec.MergeInto(fc)
+				}
+			}
+			ec.Pop()
 
 		case RESULT_START:
 			parts = append(parts, map[string]any{
@@ -152,18 +164,24 @@ func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 						"role":  currentRole,
 						"parts": parts,
 					}
+					ec.MergeInto(content)
 					contents = append(contents, content)
 				}
 				inMessage = false
 			}
+			ec.Pop()
 
 		// Tool definitions
 		case DEF_START:
+			ec.Push()
 			inToolDefs = true
 			funcDecls = nil
 
 		case DEF_NAME:
 			if inToolDefs {
+				if len(funcDecls) > 0 {
+					ec.MergeInto(funcDecls[len(funcDecls)-1])
+				}
 				funcDecls = append(funcDecls, map[string]any{
 					"name": inst.Str,
 				})
@@ -181,20 +199,26 @@ func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 
 		case DEF_END:
 			if inToolDefs && len(funcDecls) > 0 {
+				ec.MergeInto(funcDecls[len(funcDecls)-1])
 				tools = append(tools, map[string]any{
 					"functionDeclarations": funcDecls,
 				})
 			}
+			ec.Pop()
 			inToolDefs = false
 
 		case SET_META:
 			if inst.Key == "media_type" {
 				lastMediaType = inst.Str
+			} else if ec.Depth() > 0 {
+				ec.AddString(inst.Key, inst.Str)
+			} else {
+				result[inst.Key] = inst.Str
 			}
 
 		// Extensions
 		case EXT_DATA:
-			result[inst.Key] = json.RawMessage(inst.JSON)
+			ec.AddJSON(inst.Key, inst.JSON)
 		}
 	}
 
@@ -214,5 +238,6 @@ func (e *GoogleGenAIEmitter) EmitRequest(prog *Program) ([]byte, error) {
 		result["generation_config"] = genConfig
 	}
 
+	ec.MergeInto(result)
 	return json.Marshal(result)
 }

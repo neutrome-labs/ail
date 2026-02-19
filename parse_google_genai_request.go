@@ -72,23 +72,49 @@ func (p *GoogleGenAIParser) ParseRequest(body []byte) (*Program, error) {
 
 	// Tools
 	if toolsRaw, ok := raw["tools"]; ok {
-		var toolSets []struct {
-			FunctionDeclarations []struct {
-				Name        string          `json:"name"`
-				Description string          `json:"description,omitempty"`
-				Parameters  json.RawMessage `json:"parameters,omitempty"`
-			} `json:"functionDeclarations,omitempty"`
-		}
-		if json.Unmarshal(toolsRaw, &toolSets) == nil {
+		var rawToolSets []json.RawMessage
+		if json.Unmarshal(toolsRaw, &rawToolSets) == nil && len(rawToolSets) > 0 {
 			prog.Emit(DEF_START)
-			for _, ts := range toolSets {
-				for _, fd := range ts.FunctionDeclarations {
-					prog.EmitString(DEF_NAME, fd.Name)
-					if fd.Description != "" {
-						prog.EmitString(DEF_DESC, fd.Description)
+			for _, rts := range rawToolSets {
+				var tsMap map[string]json.RawMessage
+				if json.Unmarshal(rts, &tsMap) != nil {
+					continue
+				}
+				fdRaw, ok := tsMap["functionDeclarations"]
+				if !ok {
+					continue
+				}
+				var rawDecls []json.RawMessage
+				if json.Unmarshal(fdRaw, &rawDecls) != nil {
+					continue
+				}
+				for _, rd := range rawDecls {
+					var fdMap map[string]json.RawMessage
+					if json.Unmarshal(rd, &fdMap) != nil {
+						continue
 					}
-					if len(fd.Parameters) > 0 {
-						prog.EmitJSON(DEF_SCHEMA, fd.Parameters)
+					if nameRaw, ok := fdMap["name"]; ok {
+						var name string
+						if json.Unmarshal(nameRaw, &name) == nil {
+							prog.EmitString(DEF_NAME, name)
+						}
+						delete(fdMap, "name")
+					}
+					if descRaw, ok := fdMap["description"]; ok {
+						var desc string
+						if json.Unmarshal(descRaw, &desc) == nil && desc != "" {
+							prog.EmitString(DEF_DESC, desc)
+						}
+						delete(fdMap, "description")
+					}
+					if paramsRaw, ok := fdMap["parameters"]; ok {
+						prog.EmitJSON(DEF_SCHEMA, paramsRaw)
+						delete(fdMap, "parameters")
+					}
+
+					// Remaining per-declaration fields as EXT_DATA
+					for key, val := range fdMap {
+						prog.EmitKeyJSON(EXT_DATA, key, val)
 					}
 				}
 			}

@@ -12,6 +12,7 @@ func (e *AnthropicEmitter) EmitResponse(prog *Program) ([]byte, error) {
 
 	var contentBlocks []any
 	var textContent string
+	ec := NewExtrasCollector()
 	inMessage := false
 
 	for _, inst := range prog.Code {
@@ -35,6 +36,7 @@ func (e *AnthropicEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			}
 
 		case MSG_START:
+			ec.Push()
 			inMessage = true
 			contentBlocks = nil
 			textContent = ""
@@ -45,6 +47,7 @@ func (e *AnthropicEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			}
 
 		case CALL_START:
+			ec.Push()
 			if inMessage {
 				if textContent != "" {
 					contentBlocks = append(contentBlocks, map[string]any{
@@ -75,6 +78,15 @@ func (e *AnthropicEmitter) EmitResponse(prog *Program) ([]byte, error) {
 				}
 			}
 
+		case CALL_END:
+			if len(contentBlocks) > 0 {
+				last := contentBlocks[len(contentBlocks)-1].(map[string]any)
+				if last["type"] == "tool_use" {
+					ec.MergeInto(last)
+				}
+			}
+			ec.Pop()
+
 		case RESP_DONE:
 			switch inst.Str {
 			case "stop":
@@ -88,7 +100,12 @@ func (e *AnthropicEmitter) EmitResponse(prog *Program) ([]byte, error) {
 			}
 
 		case EXT_DATA:
-			result[inst.Key] = json.RawMessage(inst.JSON)
+			ec.AddJSON(inst.Key, inst.JSON)
+
+		case SET_META:
+			if inst.Key != "media_type" {
+				ec.AddString(inst.Key, inst.Str)
+			}
 
 		case MSG_END:
 			if inMessage {
@@ -100,6 +117,9 @@ func (e *AnthropicEmitter) EmitResponse(prog *Program) ([]byte, error) {
 				}
 				inMessage = false
 			}
+			// Anthropic is flat — MSG-level extras go to result directly
+			ec.MergeInto(result)
+			ec.Pop()
 		}
 	}
 
@@ -109,5 +129,6 @@ func (e *AnthropicEmitter) EmitResponse(prog *Program) ([]byte, error) {
 		result["content"] = []any{}
 	}
 
+	ec.MergeInto(result)
 	return json.Marshal(result)
 }

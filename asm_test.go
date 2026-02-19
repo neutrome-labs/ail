@@ -293,6 +293,197 @@ func TestAsmDisasmBufferRoundTrip(t *testing.T) {
 	}
 }
 
+// TestAsmHeredocStringRoundTrip verifies that a TXT_CHUNK value containing
+// newlines survives a Disasm → Asm round-trip via the heredoc block format.
+func TestAsmHeredocStringRoundTrip(t *testing.T) {
+	orig := NewProgram()
+	orig.Emit(MSG_START)
+	orig.Emit(ROLE_USR)
+	orig.EmitString(TXT_CHUNK, "line one\nline two\nline three")
+	orig.Emit(MSG_END)
+
+	text := orig.Disasm()
+	t.Logf("Disasm with multiline TXT_CHUNK:\n%s", text)
+
+	if !strings.Contains(text, "<<<") {
+		t.Error("expected heredoc <<< in Disasm output for multiline string")
+	}
+
+	got, err := Asm(text)
+	if err != nil {
+		t.Fatalf("Asm failed: %v", err)
+	}
+
+	// Find the TXT_CHUNK and verify it round-tripped
+	found := false
+	for _, inst := range got.Code {
+		if inst.Op == TXT_CHUNK {
+			found = true
+			want := "line one\nline two\nline three"
+			if inst.Str != want {
+				t.Errorf("TXT_CHUNK.Str = %q, want %q", inst.Str, want)
+			}
+		}
+	}
+	if !found {
+		t.Error("TXT_CHUNK instruction not found after Asm")
+	}
+}
+
+// TestAsmHeredocManualString tests handwriting a heredoc string block.
+func TestAsmHeredocManualString(t *testing.T) {
+	text := `MSG_START
+  ROLE_SYS
+  DEF_DESC <<<
+You are a helpful assistant.
+Respond concisely.
+  Answer in the user's language.
+>>>
+MSG_END
+`
+	prog, err := Asm(text)
+	if err != nil {
+		t.Fatalf("Asm failed: %v", err)
+	}
+
+	want := "You are a helpful assistant.\nRespond concisely.\n  Answer in the user's language."
+	found := false
+	for _, inst := range prog.Code {
+		if inst.Op == DEF_DESC {
+			found = true
+			if inst.Str != want {
+				t.Errorf("DEF_DESC.Str = %q, want %q", inst.Str, want)
+			}
+		}
+	}
+	if !found {
+		t.Error("DEF_DESC instruction not found")
+	}
+}
+
+// TestAsmHeredocJSONRoundTrip verifies that pretty-printed JSON stored in a
+// DEF_SCHEMA survives a Disasm → Asm round-trip (Disasm always compacts).
+func TestAsmHeredocJSONRoundTrip(t *testing.T) {
+	prettyJSON := []byte("{\n  \"type\": \"object\",\n  \"properties\": {\n    \"city\": {\"type\": \"string\"}\n  }\n}")
+
+	orig := NewProgram()
+	orig.Emit(DEF_START)
+	orig.EmitString(DEF_NAME, "get_weather")
+	orig.EmitJSON(DEF_SCHEMA, prettyJSON)
+	orig.Emit(DEF_END)
+
+	text := orig.Disasm()
+	t.Logf("Disasm with pretty JSON:\n%s", text)
+
+	// Disasm must have compacted the JSON (no raw newlines in the output line)
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "DEF_SCHEMA") {
+			if strings.TrimSpace(line) == "DEF_SCHEMA" {
+				t.Error("DEF_SCHEMA line has no JSON value")
+			}
+			break
+		}
+	}
+
+	got, err := Asm(text)
+	if err != nil {
+		t.Fatalf("Asm failed: %v", err)
+	}
+
+	found := false
+	for _, inst := range got.Code {
+		if inst.Op == DEF_SCHEMA {
+			found = true
+			want := `{"type":"object","properties":{"city":{"type":"string"}}}`
+			if string(inst.JSON) != want {
+				t.Errorf("DEF_SCHEMA JSON = %s, want %s", inst.JSON, want)
+			}
+		}
+	}
+	if !found {
+		t.Error("DEF_SCHEMA instruction not found after Asm")
+	}
+}
+
+// TestAsmHeredocManualJSON tests handwriting a heredoc block for a JSON-arg
+// opcode (e.g. DEF_SCHEMA with pretty-printed JSON).
+func TestAsmHeredocManualJSON(t *testing.T) {
+	text := `DEF_START
+  DEF_NAME lookup
+  DEF_SCHEMA <<<
+{
+  "type": "object",
+  "properties": {
+    "query": {"type": "string"},
+    "limit": {"type": "integer"}
+  },
+  "required": ["query"]
+}
+>>>
+DEF_END
+`
+	prog, err := Asm(text)
+	if err != nil {
+		t.Fatalf("Asm failed: %v", err)
+	}
+
+	want := `{"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"}},"required":["query"]}`
+	found := false
+	for _, inst := range prog.Code {
+		if inst.Op == DEF_SCHEMA {
+			found = true
+			if string(inst.JSON) != want {
+				t.Errorf("DEF_SCHEMA JSON = %s, want %s", inst.JSON, want)
+			}
+		}
+	}
+	if !found {
+		t.Error("DEF_SCHEMA instruction not found")
+	}
+}
+
+// TestAsmHeredocEXTData tests heredoc for EXT_DATA JSON.
+func TestAsmHeredocEXTData(t *testing.T) {
+	text := `EXT_DATA mykey <<<
+{
+  "nested": {
+    "value": 42
+  }
+}
+>>>
+`
+	prog, err := Asm(text)
+	if err != nil {
+		t.Fatalf("Asm failed: %v", err)
+	}
+
+	found := false
+	for _, inst := range prog.Code {
+		if inst.Op == EXT_DATA && inst.Key == "mykey" {
+			found = true
+			want := `{"nested":{"value":42}}`
+			if string(inst.JSON) != want {
+				t.Errorf("EXT_DATA JSON = %s, want %s", inst.JSON, want)
+			}
+		}
+	}
+	if !found {
+		t.Error("EXT_DATA instruction not found")
+	}
+}
+
+// TestAsmHeredocUnclosed verifies that an unclosed heredoc block yields an error.
+func TestAsmHeredocUnclosed(t *testing.T) {
+	text := `TXT_CHUNK <<<
+line one
+line two
+`
+	_, err := Asm(text)
+	if err == nil {
+		t.Error("expected error for unclosed heredoc block")
+	}
+}
+
 // TestAsmManualRefDirective tests writing .ref / IMG_REF by hand (no prior Disasm).
 func TestAsmManualRefDirective(t *testing.T) {
 	// User manually authors a .ail.txt with an embedded image.

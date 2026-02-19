@@ -42,49 +42,67 @@ func (p *GoogleGenAIParser) ParseResponse(body []byte) (*Program, error) {
 
 	// Candidates → messages
 	if candidatesRaw, ok := raw["candidates"]; ok {
-		var candidates []struct {
-			Content *struct {
-				Role  string `json:"role"`
-				Parts []struct {
-					Text         string `json:"text,omitempty"`
-					FunctionCall *struct {
-						Name string          `json:"name"`
-						Args json.RawMessage `json:"args"`
-					} `json:"functionCall,omitempty"`
-				} `json:"parts"`
-			} `json:"content,omitempty"`
-			FinishReason string `json:"finishReason,omitempty"`
-		}
-		if json.Unmarshal(candidatesRaw, &candidates) == nil {
-			for _, cand := range candidates {
+		var rawCands []json.RawMessage
+		if json.Unmarshal(candidatesRaw, &rawCands) == nil {
+			for _, rc := range rawCands {
+				var candMap map[string]json.RawMessage
+				if json.Unmarshal(rc, &candMap) != nil {
+					continue
+				}
+
 				prog.Emit(MSG_START)
 				prog.Emit(ROLE_AST)
 
-				if cand.Content != nil {
-					for _, part := range cand.Content.Parts {
-						if part.Text != "" {
-							prog.EmitString(TXT_CHUNK, part.Text)
-						}
-						if part.FunctionCall != nil {
-							prog.EmitString(CALL_START, "")
-							prog.EmitString(CALL_NAME, part.FunctionCall.Name)
-							if len(part.FunctionCall.Args) > 0 {
-								prog.EmitJSON(CALL_ARGS, part.FunctionCall.Args)
+				if contentRaw, ok := candMap["content"]; ok {
+					var content struct {
+						Parts []struct {
+							Text         string `json:"text,omitempty"`
+							FunctionCall *struct {
+								Name string          `json:"name"`
+								Args json.RawMessage `json:"args"`
+							} `json:"functionCall,omitempty"`
+						} `json:"parts"`
+					}
+					if json.Unmarshal(contentRaw, &content) == nil {
+						for _, part := range content.Parts {
+							if part.Text != "" {
+								prog.EmitString(TXT_CHUNK, part.Text)
 							}
-							prog.Emit(CALL_END)
+							if part.FunctionCall != nil {
+								prog.EmitString(CALL_START, "")
+								prog.EmitString(CALL_NAME, part.FunctionCall.Name)
+								if len(part.FunctionCall.Args) > 0 {
+									prog.EmitJSON(CALL_ARGS, part.FunctionCall.Args)
+								}
+								prog.Emit(CALL_END)
+							}
 						}
 					}
+					delete(candMap, "content")
 				}
 
-				if cand.FinishReason != "" {
-					switch cand.FinishReason {
-					case "STOP":
-						prog.EmitString(RESP_DONE, "stop")
-					case "MAX_TOKENS":
-						prog.EmitString(RESP_DONE, "length")
-					default:
-						prog.EmitString(RESP_DONE, cand.FinishReason)
+				if frRaw, ok := candMap["finishReason"]; ok {
+					var fr string
+					if json.Unmarshal(frRaw, &fr) == nil && fr != "" {
+						switch fr {
+						case "STOP":
+							prog.EmitString(RESP_DONE, "stop")
+						case "MAX_TOKENS":
+							prog.EmitString(RESP_DONE, "length")
+						default:
+							prog.EmitString(RESP_DONE, fr)
+						}
 					}
+					delete(candMap, "finishReason")
+				}
+
+				// Remove index (reconstructed by emitter from ordering)
+				delete(candMap, "index")
+
+				// Passthrough remaining candidate-level fields as EXT_DATA
+				// inside the MSG block (e.g. safetyRatings, citationMetadata).
+				for key, val := range candMap {
+					prog.EmitKeyJSON(EXT_DATA, key, val)
 				}
 
 				prog.Emit(MSG_END)

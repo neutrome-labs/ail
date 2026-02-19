@@ -11,6 +11,7 @@ type ResponsesEmitter struct{}
 
 func (e *ResponsesEmitter) EmitRequest(prog *Program) ([]byte, error) {
 	result := make(map[string]any)
+	ec := NewExtrasCollector()
 	var input []map[string]any
 	var tools []map[string]any
 	var systemText string
@@ -39,6 +40,7 @@ func (e *ResponsesEmitter) EmitRequest(prog *Program) ([]byte, error) {
 
 		// Messages
 		case MSG_START:
+			ec.Push()
 			currentMsg = make(map[string]any)
 			currentRole = ""
 			textContent = ""
@@ -68,19 +70,23 @@ func (e *ResponsesEmitter) EmitRequest(prog *Program) ([]byte, error) {
 					if textContent != "" {
 						currentMsg["content"] = textContent
 					}
+					ec.MergeInto(currentMsg)
 					input = append(input, currentMsg)
 				}
 				currentMsg = nil
 			}
+			ec.Pop()
 
 		// Tool definitions (Responses API: flat structure)
 		case DEF_START:
+			ec.Push()
 			inToolDefs = true
 			currentTool = nil
 
 		case DEF_NAME:
 			if inToolDefs {
 				if currentTool != nil {
+					ec.MergeInto(currentTool)
 					tools = append(tools, currentTool)
 				}
 				currentTool = map[string]any{
@@ -101,14 +107,25 @@ func (e *ResponsesEmitter) EmitRequest(prog *Program) ([]byte, error) {
 
 		case DEF_END:
 			if inToolDefs && currentTool != nil {
+				ec.MergeInto(currentTool)
 				tools = append(tools, currentTool)
 				currentTool = nil
 			}
+			ec.Pop()
 			inToolDefs = false
 
 		// Extensions
+		case SET_META:
+			if inst.Key == "media_type" {
+				// consumed by IMG_REF / AUD_REF
+			} else if ec.Depth() > 0 {
+				ec.AddString(inst.Key, inst.Str)
+			} else {
+				result[inst.Key] = inst.Str
+			}
+
 		case EXT_DATA:
-			result[inst.Key] = json.RawMessage(inst.JSON)
+			ec.AddJSON(inst.Key, inst.JSON)
 		}
 	}
 
@@ -122,5 +139,6 @@ func (e *ResponsesEmitter) EmitRequest(prog *Program) ([]byte, error) {
 		result["tools"] = tools
 	}
 
+	ec.MergeInto(result)
 	return json.Marshal(result)
 }

@@ -6,6 +6,7 @@ import (
 
 func (e *GoogleGenAIEmitter) EmitStreamChunk(prog *Program) ([]byte, error) {
 	result := make(map[string]any)
+	ec := NewExtrasCollector()
 
 	var parts []any
 	var finishReason string
@@ -56,7 +57,12 @@ func (e *GoogleGenAIEmitter) EmitStreamChunk(prog *Program) ([]byte, error) {
 			}
 
 		case EXT_DATA:
-			result[inst.Key] = json.RawMessage(inst.JSON)
+			ec.AddJSON(inst.Key, inst.JSON)
+
+		case SET_META:
+			if inst.Key != "media_type" {
+				ec.AddString(inst.Key, inst.Str)
+			}
 		}
 	}
 
@@ -72,5 +78,6 @@ func (e *GoogleGenAIEmitter) EmitStreamChunk(prog *Program) ([]byte, error) {
 	}
 	result["candidates"] = []any{cand}
 
+	ec.MergeInto(result)
 	return json.Marshal(result)
 }

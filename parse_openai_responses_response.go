@@ -53,46 +53,75 @@ func (p *ResponsesParser) ParseResponse(body []byte) (*Program, error) {
 
 	// Output items → messages
 	if outputRaw, ok := raw["output"]; ok {
-		var items []struct {
-			Type      string          `json:"type"`
-			ID        string          `json:"id,omitempty"`
-			Status    string          `json:"status,omitempty"`
-			Role      string          `json:"role,omitempty"`
-			Content   json.RawMessage `json:"content,omitempty"`
-			CallID    string          `json:"call_id,omitempty"`
-			Name      string          `json:"name,omitempty"`
-			Arguments string          `json:"arguments,omitempty"`
-		}
-		if json.Unmarshal(outputRaw, &items) == nil {
-			for _, item := range items {
-				switch item.Type {
+		var rawItems []json.RawMessage
+		if json.Unmarshal(outputRaw, &rawItems) == nil {
+			for _, ri := range rawItems {
+				var itemMap map[string]json.RawMessage
+				if json.Unmarshal(ri, &itemMap) != nil {
+					continue
+				}
+
+				var itemType string
+				if typeRaw, ok := itemMap["type"]; ok {
+					json.Unmarshal(typeRaw, &itemType)
+				}
+
+				switch itemType {
 				case "message":
 					prog.Emit(MSG_START)
 					prog.Emit(ROLE_AST)
 					// Content is an array of content parts
-					if item.Content != nil {
+					if contentRaw, ok := itemMap["content"]; ok {
 						var parts []struct {
 							Type string `json:"type"`
 							Text string `json:"text,omitempty"`
 						}
-						if json.Unmarshal(item.Content, &parts) == nil {
+						if json.Unmarshal(contentRaw, &parts) == nil {
 							for _, part := range parts {
 								if part.Type == "output_text" || part.Type == "text" {
 									prog.EmitString(TXT_CHUNK, part.Text)
 								}
 							}
 						}
+						delete(itemMap, "content")
 					}
 					prog.EmitString(RESP_DONE, "stop")
+					// Remaining item-level fields as EXT_DATA
+					delete(itemMap, "type")
+					delete(itemMap, "role")
+					delete(itemMap, "status")
+					for key, val := range itemMap {
+						prog.EmitKeyJSON(EXT_DATA, key, val)
+					}
 					prog.Emit(MSG_END)
 
 				case "function_call":
 					prog.Emit(MSG_START)
 					prog.Emit(ROLE_AST)
-					prog.EmitString(CALL_START, item.CallID)
-					prog.EmitString(CALL_NAME, item.Name)
-					if item.Arguments != "" {
-						prog.EmitJSON(CALL_ARGS, json.RawMessage(item.Arguments))
+					var callID, name, arguments string
+					if cidRaw, ok := itemMap["call_id"]; ok {
+						json.Unmarshal(cidRaw, &callID)
+						delete(itemMap, "call_id")
+					}
+					if nameRaw, ok := itemMap["name"]; ok {
+						json.Unmarshal(nameRaw, &name)
+						delete(itemMap, "name")
+					}
+					if argsRaw, ok := itemMap["arguments"]; ok {
+						json.Unmarshal(argsRaw, &arguments)
+						delete(itemMap, "arguments")
+					}
+					prog.EmitString(CALL_START, callID)
+					prog.EmitString(CALL_NAME, name)
+					if arguments != "" {
+						prog.EmitJSON(CALL_ARGS, json.RawMessage(arguments))
+					}
+					// Remaining item-level fields as EXT_DATA inside CALL
+					delete(itemMap, "type")
+					delete(itemMap, "status")
+					delete(itemMap, "id")
+					for key, val := range itemMap {
+						prog.EmitKeyJSON(EXT_DATA, key, val)
 					}
 					prog.Emit(CALL_END)
 					prog.EmitString(RESP_DONE, "tool_calls")

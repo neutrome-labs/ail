@@ -8,6 +8,7 @@ func (e *ChatCompletionsEmitter) EmitStreamChunk(prog *Program) ([]byte, error) 
 	result := map[string]any{
 		"object": "chat.completion.chunk",
 	}
+	ec := NewExtrasCollector()
 
 	var choices []map[string]any
 	var delta map[string]any
@@ -79,7 +80,12 @@ func (e *ChatCompletionsEmitter) EmitStreamChunk(prog *Program) ([]byte, error) 
 			choices = append(choices, choice)
 
 		case EXT_DATA:
-			result[inst.Key] = json.RawMessage(inst.JSON)
+			ec.AddJSON(inst.Key, inst.JSON)
+
+		case SET_META:
+			if inst.Key != "media_type" {
+				ec.AddString(inst.Key, inst.Str)
+			}
 
 		case STREAM_END:
 			// end marker - no additional data
@@ -93,5 +99,6 @@ func (e *ChatCompletionsEmitter) EmitStreamChunk(prog *Program) ([]byte, error) 
 		result["choices"] = []any{}
 	}
 
+	ec.MergeInto(result)
 	return json.Marshal(result)
 }

@@ -467,18 +467,25 @@ func TestExtDataPassthrough(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	// Count EXT_DATA instructions
+	// response_format should be SET_FMT, not EXT_DATA
+	fmtCount := 0
 	extCount := 0
 	for _, inst := range prog.Code {
+		if inst.Op == SET_FMT {
+			fmtCount++
+		}
 		if inst.Op == EXT_DATA {
 			extCount++
 		}
 	}
+	if fmtCount != 1 {
+		t.Errorf("expected 1 SET_FMT, got %d\n%s", fmtCount, prog.Disasm())
+	}
 	if extCount < 2 {
-		t.Errorf("expected at least 2 EXT_DATA, got %d\n%s", extCount, prog.Disasm())
+		t.Errorf("expected at least 2 EXT_DATA (seed, logprobs), got %d\n%s", extCount, prog.Disasm())
 	}
 
-	// Emit back - EXT_DATA should survive
+	// Emit back - should survive round-trip
 	emitter := &ChatCompletionsEmitter{}
 	out, err := emitter.EmitRequest(prog)
 	if err != nil {
@@ -488,10 +495,82 @@ func TestExtDataPassthrough(t *testing.T) {
 	var result map[string]json.RawMessage
 	json.Unmarshal(out, &result)
 	if _, ok := result["response_format"]; !ok {
-		t.Error("response_format should survive round-trip via EXT_DATA")
+		t.Error("response_format should survive round-trip via SET_FMT")
 	}
 	if _, ok := result["seed"]; !ok {
 		t.Error("seed should survive round-trip via EXT_DATA")
+	}
+}
+
+func TestResponseFormatChatToResponses(t *testing.T) {
+	input := `{
+		"model": "gpt-4o",
+		"messages": [{"role": "user", "content": "List 3 colors in JSON."}],
+		"response_format": {"type": "json_object"}
+	}`
+
+	out, err := ConvertRequest([]byte(input), StyleChatCompletions, StyleResponses)
+	if err != nil {
+		t.Fatalf("convert chat→responses: %v", err)
+	}
+
+	var result map[string]json.RawMessage
+	json.Unmarshal(out, &result)
+
+	// Must NOT have top-level response_format (Responses API rejects it)
+	if _, ok := result["response_format"]; ok {
+		t.Error("response_format must not appear at top level in Responses API output")
+	}
+
+	// Must have text.format
+	textRaw, ok := result["text"]
+	if !ok {
+		t.Fatal("expected 'text' key in Responses API output")
+	}
+	var textObj map[string]json.RawMessage
+	if err := json.Unmarshal(textRaw, &textObj); err != nil {
+		t.Fatalf("unmarshal text: %v", err)
+	}
+	fmtRaw, ok := textObj["format"]
+	if !ok {
+		t.Fatal("expected 'text.format' key in Responses API output")
+	}
+	var fmtObj map[string]string
+	json.Unmarshal(fmtRaw, &fmtObj)
+	if fmtObj["type"] != "json_object" {
+		t.Errorf("text.format.type = %q, want json_object", fmtObj["type"])
+	}
+}
+
+func TestResponseFormatResponsesToChat(t *testing.T) {
+	input := `{
+		"model": "gpt-4o",
+		"text": {"format": {"type": "json_object"}},
+		"input": [{"role": "user", "content": "List 3 colors in JSON."}]
+	}`
+
+	out, err := ConvertRequest([]byte(input), StyleResponses, StyleChatCompletions)
+	if err != nil {
+		t.Fatalf("convert responses→chat: %v", err)
+	}
+
+	var result map[string]json.RawMessage
+	json.Unmarshal(out, &result)
+
+	// Must NOT have text key
+	if _, ok := result["text"]; ok {
+		t.Error("'text' key must not appear in Chat Completions output")
+	}
+
+	// Must have response_format
+	fmtRaw, ok := result["response_format"]
+	if !ok {
+		t.Fatal("expected 'response_format' key in Chat Completions output")
+	}
+	var fmtObj map[string]string
+	json.Unmarshal(fmtRaw, &fmtObj)
+	if fmtObj["type"] != "json_object" {
+		t.Errorf("response_format.type = %q, want json_object", fmtObj["type"])
 	}
 }
 

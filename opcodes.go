@@ -85,6 +85,7 @@ const (
 	SET_MAX    Opcode = 0xF4 // arg: Int
 	SET_STREAM Opcode = 0xF5 // no arg — presence means streaming
 	SET_THINK  Opcode = 0xF6 // arg: JSON — thinking/reasoning configuration
+	SET_FMT    Opcode = 0xF7 // arg: JSON — response format configuration
 	EXT_DATA   Opcode = 0xFE // arg: Key, JSON — provider-specific extension
 	SET_META   Opcode = 0xFF // arg: Key, Val
 )
@@ -102,7 +103,8 @@ var opcodeNames = map[Opcode]string{
 	STREAM_START: "STREAM_START", STREAM_DELTA: "STREAM_DELTA", STREAM_TOOL_DELTA: "STREAM_TOOL_DELTA", STREAM_END: "STREAM_END",
 	STREAM_THINK_DELTA: "STREAM_THINK_DELTA",
 	SET_MODEL:          "SET_MODEL", SET_TEMP: "SET_TEMP", SET_TOPP: "SET_TOPP", SET_STOP: "SET_STOP",
-	SET_MAX: "SET_MAX", SET_STREAM: "SET_STREAM", SET_THINK: "SET_THINK", EXT_DATA: "EXT_DATA", SET_META: "SET_META",
+	SET_MAX: "SET_MAX", SET_STREAM: "SET_STREAM", SET_THINK: "SET_THINK", SET_FMT: "SET_FMT",
+	EXT_DATA: "EXT_DATA", SET_META: "SET_META",
 }
 
 // Name returns the human-readable mnemonic for an opcode.

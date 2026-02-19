@@ -96,6 +96,12 @@ func (p *ChatCompletionsParser) ParseRequest(body []byte) (*Program, error) {
 		delete(raw, "reasoning_effort")
 	}
 
+	// Response format
+	if fmtRaw, ok := raw["response_format"]; ok {
+		prog.EmitJSON(SET_FMT, fmtRaw)
+		delete(raw, "response_format")
+	}
+
 	// Tool definitions
 	if toolsRaw, ok := raw["tools"]; ok {
 		var rawTools []json.RawMessage

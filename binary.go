@@ -74,7 +74,7 @@ func (p *Program) Encode(w io.Writer) error {
 			}
 
 		// JSON arg
-		case DEF_SCHEMA, CALL_ARGS, USAGE, STREAM_TOOL_DELTA, SET_THINK:
+		case DEF_SCHEMA, CALL_ARGS, USAGE, STREAM_TOOL_DELTA, SET_THINK, SET_FMT:
 			if err := writeBytes(w, inst.JSON); err != nil {
 				return err
 			}
@@ -192,7 +192,7 @@ func Decode(r io.Reader) (*Program, error) {
 			inst.Int = i
 
 		// JSON arg
-		case DEF_SCHEMA, CALL_ARGS, USAGE, STREAM_TOOL_DELTA, SET_THINK:
+		case DEF_SCHEMA, CALL_ARGS, USAGE, STREAM_TOOL_DELTA, SET_THINK, SET_FMT:
 			b, err := readBytes(r)
 			if err != nil {
 				return nil, fmt.Errorf("ail.Decode %s: %w", op.Name(), err)

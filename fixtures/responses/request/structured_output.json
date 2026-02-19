@@ -1,6 +1,6 @@
 {
   "model": "gpt-4o",
-  "response_format": {"type": "json_object"},
+  "text": {"format": {"type": "json_object"}},
   "instructions": "Output valid JSON.",
   "input": [
     {"role": "user", "content": "List 3 colors in JSON."}

@@ -45,7 +45,7 @@ func TestBinaryRoundTrip(t *testing.T) {
 
 	// Meta and ext
 	orig.EmitKeyVal(SET_META, "user", "test-user")
-	orig.EmitKeyJSON(EXT_DATA, "response_format", json.RawMessage(`{"type":"json_object"}`))
+	orig.EmitJSON(SET_FMT, json.RawMessage(`{"type":"json_object"}`))
 
 	// Encode
 	var buf bytes.Buffer

@@ -42,7 +42,7 @@ var intArgOps = map[Opcode]bool{
 // opcodes that take a raw JSON argument.
 var jsonArgOps = map[Opcode]bool{
 	DEF_SCHEMA: true, CALL_ARGS: true, USAGE: true, STREAM_TOOL_DELTA: true,
-	SET_THINK: true,
+	SET_THINK: true, SET_FMT: true,
 }
 
 // opcodes that take a ref:N argument.

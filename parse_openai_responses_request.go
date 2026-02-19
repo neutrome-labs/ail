@@ -69,6 +69,27 @@ func (p *ResponsesParser) ParseRequest(body []byte) (*Program, error) {
 		delete(raw, "reasoning")
 	}
 
+	// Response format: text.format in Responses API
+	if textRaw, ok := raw["text"]; ok {
+		var textObj map[string]json.RawMessage
+		if json.Unmarshal(textRaw, &textObj) == nil {
+			if fmtRaw, ok := textObj["format"]; ok {
+				prog.EmitJSON(SET_FMT, fmtRaw)
+				delete(textObj, "format")
+			}
+			// If text had other fields, keep them as EXT_DATA
+			for key, val := range textObj {
+				prog.EmitKeyJSON(EXT_DATA, "text."+key, val)
+			}
+		}
+		delete(raw, "text")
+	}
+	// Also accept legacy response_format for backward compat
+	if fmtRaw, ok := raw["response_format"]; ok {
+		prog.EmitJSON(SET_FMT, fmtRaw)
+		delete(raw, "response_format")
+	}
+
 	// Instructions → system message
 	if instrRaw, ok := raw["instructions"]; ok {
 		var instructions string

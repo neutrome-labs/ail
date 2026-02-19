@@ -86,7 +86,7 @@ func (p *Program) Disasm() string {
 		case IMG_REF, AUD_REF, TXT_REF, THINK_REF:
 			sb.WriteString(fmt.Sprintf(" ref:%d", inst.Ref))
 
-		case DEF_SCHEMA, CALL_ARGS, USAGE, STREAM_TOOL_DELTA, SET_THINK:
+		case DEF_SCHEMA, CALL_ARGS, USAGE, STREAM_TOOL_DELTA, SET_THINK, SET_FMT:
 			writeJSON(inst.JSON)
 
 		case SET_META:

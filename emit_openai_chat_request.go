@@ -58,6 +58,9 @@ func (e *ChatCompletionsEmitter) EmitRequest(prog *Program) ([]byte, error) {
 		case SET_THINK:
 			thinkingConfig = inst.JSON
 
+		case SET_FMT:
+			result["response_format"] = json.RawMessage(inst.JSON)
+
 		// ── Messages ──
 		case MSG_START:
 			ec.Push()

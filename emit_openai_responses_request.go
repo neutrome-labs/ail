@@ -40,6 +40,11 @@ func (e *ResponsesEmitter) EmitRequest(prog *Program) ([]byte, error) {
 		case SET_THINK:
 			result["reasoning"] = json.RawMessage(inst.JSON)
 
+		case SET_FMT:
+			result["text"] = map[string]any{
+				"format": json.RawMessage(inst.JSON),
+			}
+
 		// Messages
 		case MSG_START:
 			ec.Push()

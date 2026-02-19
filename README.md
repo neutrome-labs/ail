@@ -445,10 +445,21 @@ Google:    {"role": "function", "parts": [{"functionResponse": {"name": "...", "
 #### Extension Data Passthrough
 
 ```
-Input: EXT_DATA "response_format" {"type":"json_object"}
+Input: EXT_DATA "seed" 42
 
-OpenAI Emitter:    Adds "response_format": {"type":"json_object"} to request body
+OpenAI Emitter:    Adds "seed": 42 to request body
 Anthropic Emitter: Passes through (provider may ignore unsupported fields)
+```
+
+#### Response Format (SET_FMT)
+
+`SET_FMT` is a first-class opcode that each emitter maps to the provider's native format field:
+
+```
+Input: SET_FMT {"type":"json_object"}
+
+Chat Completions Emitter:  "response_format": {"type":"json_object"}
+Responses API Emitter:     "text": {"format": {"type":"json_object"}}
 ```
 
 ### Stream Conversion Edge Cases
